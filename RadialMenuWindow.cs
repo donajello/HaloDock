@@ -42,6 +42,9 @@ public sealed class RadialMenuWindow : Window
     const double AutoScrollAngleDeg = 62;  // dragging past this angle scrolls the wheel
     const double AutoScrollSeconds = 0.35;
 
+    const double TrashSize = 40;           // the × that appears in the middle while an icon is held
+    const double TrashHitFactor = 0.9;     // how close (relative to its size) counts as over it
+
     const double InnerRadiusFactor = 0.42; // inner dot ring radius, relative to the item ring
     const double DotSize = 12;
     const double DotHoverGrow = 0.5;
@@ -50,6 +53,7 @@ public sealed class RadialMenuWindow : Window
 
     // Alpha 1 is invisible but still catches the mouse (and drag-and-drop), so nothing falls through the wheel.
     static readonly Brush HitArea = Frozen(new SolidColorBrush(Color.FromArgb(0x01, 0, 0, 0)));
+    static readonly Brush DangerFill = Frozen(new SolidColorBrush(Color.FromRgb(0xE5, 0x48, 0x4D)));
 
     sealed record Palette(Brush Plate, Brush TagBackground, Brush TagText);
 
@@ -104,6 +108,14 @@ public sealed class RadialMenuWindow : Window
 
     // Where a drag would land: a gap at this position in the ring, or onto this item.
     int _gap = -1, _dropInto = -1;
+
+    // The × for removing a held icon.
+    readonly Grid _trash;
+    readonly Ellipse _trashCircle;
+    readonly Path _trashCross;
+    readonly ScaleTransform _trashScale = new();
+    double _trashShow, _trashHover;
+    bool _overTrash;
     double _lastAutoScroll;
 
     public event Action<LaunchItem>? ItemInvoked;
@@ -172,6 +184,29 @@ public sealed class RadialMenuWindow : Window
         _gapLabel = MakeTag(new TextBlock { FontSize = 12, Text = "Add to ring" });
         Panel.SetZIndex(_gapLabel, 9000);
         _canvas.Children.Add(_gapLabel);
+
+        _trashCircle = new Ellipse { Width = TrashSize, Height = TrashSize, StrokeThickness = 1.5 };
+        _trashCross = new Path
+        {
+            Data = Geometry.Parse("M 0,0 L 12,12 M 12,0 L 0,12"),
+            StrokeThickness = 2.2,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        _trash = new Grid
+        {
+            Width = TrashSize,
+            Height = TrashSize,
+            IsHitTestVisible = false,
+            Visibility = Visibility.Collapsed,
+            RenderTransformOrigin = new Point(0.5, 0.5),
+            RenderTransform = _trashScale,
+            Children = { _trashCircle, _trashCross },
+        };
+        Panel.SetZIndex(_trash, 7000); // under the held icon, over everything else
+        _canvas.Children.Add(_trash);
         Content = _canvas;
 
         SourceInitialized += (_, _) =>
@@ -225,6 +260,8 @@ public sealed class RadialMenuWindow : Window
         _hovered = _hoveredDot = -1;
         _pressIndex = _liftedIndex = -1;
         _gap = _dropInto = -1;
+        _overTrash = false;
+        _trashShow = _trashHover = 0;
         _dragging = false;
         _closing = false;
         _isOpen = true;
@@ -284,6 +321,14 @@ public sealed class RadialMenuWindow : Window
             tag.Background = _palette.TagBackground;
             ((TextBlock)tag.Child).Foreground = _palette.TagText;
         }
+        StyleTrash();
+    }
+
+    void StyleTrash()
+    {
+        _trashCircle.Fill = _overTrash ? DangerFill : _palette.TagBackground;
+        _trashCircle.Stroke = _overTrash ? DangerFill : _palette.TagText;
+        _trashCross.Stroke = _overTrash ? Brushes.White : _palette.TagText;
     }
 
     // ---- Rings ----
@@ -605,7 +650,7 @@ public sealed class RadialMenuWindow : Window
         }
         if (_contextMenuOpen) return; // keep the right-clicked item highlighted while its menu is up
 
-        UpdateDropTarget(hovered, bestDistance, itemSize, radius, onMonitor, cursorAngle, ordered, now);
+        UpdateDropTarget(hovered, bestDistance, itemSize, radius, onMonitor, cursorAngle, ordered, now, cy);
 
         _hovered = _closing || hoveredDot >= 0 || _liftedIndex >= 0 ? -1
             : _dragging ? _dropInto
@@ -613,6 +658,7 @@ public sealed class RadialMenuWindow : Window
         _hoveredDot = _closing || Busy ? -1 : hoveredDot;
         _cursorInside = onMonitor && _hubDistance <= outer;
 
+        LayoutTrash(ease, cy, hoverFollow);
         LayoutDots(ease, hoverFollow);
         LayoutGapLabel(ease, cy, radius, step);
 
@@ -659,13 +705,27 @@ public sealed class RadialMenuWindow : Window
 
     /// <summary>Works out where a held icon or dragged-in files would land, and scrolls near the ends.</summary>
     void UpdateDropTarget(int hovered, double hoveredDistance, double itemSize, double radius, bool onMonitor,
-        double cursorAngle, int ordered, double now)
+        double cursorAngle, int ordered, double now, double cy)
     {
+        var wasOverTrash = _overTrash;
+        _overTrash = false;
         if (!Busy || _closing)
         {
             _gap = _dropInto = -1;
+            if (wasOverTrash) StyleTrash();
             return;
         }
+
+        // A held icon over the × will be removed; the ring closes up to show it's going.
+        if (_liftedIndex >= 0 && _trashShow > 0.5
+            && (_cursor - TrashCenter(cy)).Length <= TrashSize * TrashHitFactor)
+        {
+            _overTrash = true;
+            _gap = -1;
+            if (!wasOverTrash) StyleTrash();
+            return;
+        }
+        if (wasOverTrash) StyleTrash();
 
         // Dragged-in files held right over a folder or app go into it; the gap stays where it was.
         if (_dragging && hovered >= 0 && _visuals[hovered].Item is { } target
@@ -704,13 +764,33 @@ public sealed class RadialMenuWindow : Window
         Canvas.SetLeft(v.Root, _cursor.X - itemSize / 2);
         Canvas.SetTop(v.Root, _cursor.Y - itemSize / 2);
         Panel.SetZIndex(v.Root, 8000);
-        v.Scale.ScaleX = v.Scale.ScaleY = 1.12;
+        v.Scale.ScaleX = v.Scale.ScaleY = _overTrash ? 0.85 : 1.12;
         v.Rotate.Angle = Math.Sin(now * 18) * 3;
         v.Plate.Opacity = 1;
-        v.Root.Opacity = _gap >= 0 ? 0.95 : 0.6; // fades when letting go would cancel
+        v.Root.Opacity = _overTrash ? 0.7 : _gap >= 0 ? 0.95 : 0.6; // fades when letting go would cancel
         v.Label.Visibility = Visibility.Collapsed;
         v.X = _cursor.X;
         v.Y = _cursor.Y;
+    }
+
+    /// <summary>The × sits in the middle of the wheel, just inside where the ring dots are.</summary>
+    Point TrashCenter(double cy) => new(InnerRadius * 0.6, cy);
+
+    void LayoutTrash(double ease, double cy, double hoverFollow)
+    {
+        _trashShow += ((_liftedIndex >= 0 ? 1 : 0) - _trashShow) * hoverFollow;
+        _trashHover += ((_overTrash ? 1 : 0) - _trashHover) * hoverFollow;
+        if (_trashShow < 0.01)
+        {
+            _trash.Visibility = Visibility.Collapsed;
+            return;
+        }
+        var c = TrashCenter(cy);
+        _trash.Visibility = Visibility.Visible;
+        Canvas.SetLeft(_trash, c.X - TrashSize / 2);
+        Canvas.SetTop(_trash, c.Y - TrashSize / 2);
+        _trashScale.ScaleX = _trashScale.ScaleY = (0.6 + 0.4 * _trashShow) * (1 + 0.25 * _trashHover);
+        _trash.Opacity = ease * _trashShow;
     }
 
     void LayoutDots(double ease, double hoverFollow)
@@ -723,7 +803,8 @@ public sealed class RadialMenuWindow : Window
             Canvas.SetLeft(d.Shape, d.X - DotSize / 2);
             Canvas.SetTop(d.Shape, d.Y - DotSize / 2);
             d.Scale.ScaleX = d.Scale.ScaleY = s;
-            d.Shape.Opacity = ease * (i == _ring || i == _hoveredDot ? 1 : 0.7);
+            // Dots step aside while the × is showing.
+            d.Shape.Opacity = ease * (1 - _trashShow) * (i == _ring || i == _hoveredDot ? 1 : 0.7);
         }
 
         if (_hoveredDot < 0 || ease < 0.5)
@@ -838,7 +919,8 @@ public sealed class RadialMenuWindow : Window
     {
         _pressIndex = -1;
         if (_liftedIndex < 0) return;
-        _gap = -1; // capture lost mid-drag (e.g. Alt+Tab): put it back
+        _gap = -1; // capture lost mid-drag (e.g. Alt+Tab): put it back, never delete it
+        _overTrash = false;
         PutDown(_liftedIndex);
     }
 
@@ -854,6 +936,18 @@ public sealed class RadialMenuWindow : Window
     {
         var v = _visuals[from];
         _liftedIndex = -1;
+
+        if (_overTrash && v.Item != null)
+        {
+            _overTrash = false;
+            _gap = -1;
+            StyleTrash();
+            CurrentRing.Items.RemoveAt(from);
+            RebuildItems(keepOffset: true); // the rest have already closed up, so nothing jumps
+            RingEdited?.Invoke();
+            return;
+        }
+
         v.Slot = _cursorSlot; // glide from where it was let go into its place
         if (_gap >= 0 && v.Item != null)
         {
@@ -974,7 +1068,7 @@ public sealed class RadialMenuWindow : Window
     /// <summary>
     /// Debug aid (<c>HaloDock.exe --snapshot out.png [hoverIndex]</c>): renders the fully-open wheel
     /// over a plain background without touching the screen. A negative index -N hovers ring dot N-2;
-    /// 100+N shows item N picked up and held over the gap after it.
+    /// 100+N shows item N picked up and held over the gap after it; 200+N shows it held over the ×.
     /// </summary>
     public BitmapSource RenderSnapshot(int width, int height, int hoverIndex)
     {
@@ -990,7 +1084,12 @@ public sealed class RadialMenuWindow : Window
         // Aim the pointer at the requested item or dot, then let the animations settle.
         Layout(0, new Point(-1000, -1000), height, cy, true);
         var cursor = new Point(-1000, -1000);
-        if (hoverIndex >= 100 && hoverIndex - 100 < _visuals.Count - 1)
+        if (hoverIndex >= 200 && hoverIndex - 200 < _visuals.Count)
+        {
+            Lift(hoverIndex - 200);
+            cursor = TrashCenter(cy);
+        }
+        else if (hoverIndex >= 100 && hoverIndex - 100 < _visuals.Count - 1)
         {
             var held = hoverIndex - 100;
             Lift(held);
