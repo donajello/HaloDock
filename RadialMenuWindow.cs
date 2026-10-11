@@ -42,7 +42,7 @@ public sealed class RadialMenuWindow : Window
     const double AutoScrollAngleDeg = 62;  // dragging past this angle scrolls the wheel
     const double AutoScrollSeconds = 0.35;
 
-    const double TrashSize = 40;           // the × that appears in the middle while an icon is held
+    const double TrashSize = 40;           // the remove target that appears in the middle while an icon is held
     const double TrashHitFactor = 0.9;     // how close (relative to its size) counts as over it
 
     const double InnerRadiusFactor = 0.42; // inner dot ring radius, relative to the item ring
@@ -109,10 +109,10 @@ public sealed class RadialMenuWindow : Window
     // Where a drag would land: a gap at this position in the ring, or onto this item.
     int _gap = -1, _dropInto = -1;
 
-    // The × for removing a held icon.
+    // The drop target in the middle for taking a held icon off the ring.
     readonly Grid _trash;
     readonly Ellipse _trashCircle;
-    readonly Path _trashCross;
+    readonly TextBlock _trashGlyph;
     readonly ScaleTransform _trashScale = new();
     double _trashShow, _trashHover;
     bool _overTrash;
@@ -185,13 +185,11 @@ public sealed class RadialMenuWindow : Window
         Panel.SetZIndex(_gapLabel, 9000);
         _canvas.Children.Add(_gapLabel);
 
-        _trashCircle = new Ellipse { Width = TrashSize, Height = TrashSize, StrokeThickness = 1.5 };
-        _trashCross = new Path
+        _trashCircle = new Ellipse { Width = TrashSize, Height = TrashSize };
+        _trashGlyph = new TextBlock
         {
-            Data = Geometry.Parse("M 0,0 L 12,12 M 12,0 L 0,12"),
-            StrokeThickness = 2.2,
-            StrokeStartLineCap = PenLineCap.Round,
-            StrokeEndLineCap = PenLineCap.Round,
+            FontFamily = new FontFamily(RemoveSymbols.Font),
+            FontSize = 17,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -203,7 +201,7 @@ public sealed class RadialMenuWindow : Window
             Visibility = Visibility.Collapsed,
             RenderTransformOrigin = new Point(0.5, 0.5),
             RenderTransform = _trashScale,
-            Children = { _trashCircle, _trashCross },
+            Children = { _trashCircle, _trashGlyph },
         };
         Panel.SetZIndex(_trash, 7000); // under the held icon, over everything else
         _canvas.Children.Add(_trash);
@@ -327,8 +325,8 @@ public sealed class RadialMenuWindow : Window
     void StyleTrash()
     {
         _trashCircle.Fill = _overTrash ? DangerFill : _palette.TagBackground;
-        _trashCircle.Stroke = _overTrash ? DangerFill : _palette.TagText;
-        _trashCross.Stroke = _overTrash ? Brushes.White : _palette.TagText;
+        _trashGlyph.Foreground = _overTrash ? Brushes.White : _palette.TagText;
+        _trashGlyph.Text = RemoveSymbols.Glyph(_settings.RemoveSymbol);
     }
 
     // ---- Rings ----
@@ -716,7 +714,7 @@ public sealed class RadialMenuWindow : Window
             return;
         }
 
-        // A held icon over the × will be removed; the ring closes up to show it's going.
+        // A held icon over the remove target comes off the ring; the ring closes up to show it's going.
         if (_liftedIndex >= 0 && _trashShow > 0.5
             && (_cursor - TrashCenter(cy)).Length <= TrashSize * TrashHitFactor)
         {
@@ -773,7 +771,7 @@ public sealed class RadialMenuWindow : Window
         v.Y = _cursor.Y;
     }
 
-    /// <summary>The × sits in the middle of the wheel, just inside where the ring dots are.</summary>
+    /// <summary>The remove target sits in the middle of the wheel, just inside where the ring dots are.</summary>
     Point TrashCenter(double cy) => new(InnerRadius * 0.6, cy);
 
     void LayoutTrash(double ease, double cy, double hoverFollow)
@@ -803,7 +801,7 @@ public sealed class RadialMenuWindow : Window
             Canvas.SetLeft(d.Shape, d.X - DotSize / 2);
             Canvas.SetTop(d.Shape, d.Y - DotSize / 2);
             d.Scale.ScaleX = d.Scale.ScaleY = s;
-            // Dots step aside while the × is showing.
+            // Dots step aside while the remove target is showing.
             d.Shape.Opacity = ease * (1 - _trashShow) * (i == _ring || i == _hoveredDot ? 1 : 0.7);
         }
 
@@ -1068,7 +1066,7 @@ public sealed class RadialMenuWindow : Window
     /// <summary>
     /// Debug aid (<c>HaloDock.exe --snapshot out.png [hoverIndex]</c>): renders the fully-open wheel
     /// over a plain background without touching the screen. A negative index -N hovers ring dot N-2;
-    /// 100+N shows item N picked up and held over the gap after it; 200+N shows it held over the ×.
+    /// 100+N shows item N picked up and held over the gap after it; 200+N shows it held over the remove target.
     /// </summary>
     public BitmapSource RenderSnapshot(int width, int height, int hoverIndex)
     {

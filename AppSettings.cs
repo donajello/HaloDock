@@ -38,6 +38,40 @@ public sealed class LaunchItem
     }
 }
 
+/// <summary>Symbol on the drop target that takes a held icon off the ring.</summary>
+public enum RemoveSymbol
+{
+    Minus,
+    Unpin,
+    Hide,
+    Unstar,
+    Cross,
+}
+
+public static class RemoveSymbols
+{
+    /// <summary>Icon-font family that ships with Windows (Fluent on 11, MDL2 on 10).</summary>
+    public const string Font = "Segoe Fluent Icons, Segoe MDL2 Assets";
+
+    public static string Glyph(RemoveSymbol symbol) => symbol switch
+    {
+        RemoveSymbol.Unpin => "",
+        RemoveSymbol.Hide => "",
+        RemoveSymbol.Unstar => "",
+        RemoveSymbol.Cross => "",
+        _ => "",
+    };
+
+    public static string Label(RemoveSymbol symbol) => symbol switch
+    {
+        RemoveSymbol.Unpin => "Unpin",
+        RemoveSymbol.Hide => "Eye with a slash",
+        RemoveSymbol.Unstar => "Star with a slash",
+        RemoveSymbol.Cross => "Cross",
+        _ => "Minus",
+    };
+}
+
 /// <summary>A saved set of items, shown as one coloured dot on the menu's inner ring.</summary>
 public sealed class RingPreset
 {
@@ -76,6 +110,7 @@ public sealed class AppSettings
     public double Radius { get; set; } = 190;
     public double ItemSize { get; set; } = 72;
     public bool InvertScroll { get; set; }
+    public RemoveSymbol RemoveSymbol { get; set; } = RemoveSymbol.Minus;
     public bool IgnoreFullscreen { get; set; } = true;
     public bool StartWithWindows { get; set; }
 

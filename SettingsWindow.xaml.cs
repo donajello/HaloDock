@@ -55,6 +55,9 @@ public partial class SettingsWindow : Window
         RadiusSlider.Value = settings.Radius;
         SizeSlider.Value = settings.ItemSize;
         InvertScroll.IsChecked = settings.InvertScroll;
+        var symbols = Enum.GetValues<RemoveSymbol>().Select(s => new SymbolRow(s)).ToList();
+        SymbolPicker.ItemsSource = symbols;
+        SymbolPicker.SelectedItem = symbols.First(s => s.Value == settings.RemoveSymbol);
         IgnoreFullscreen.IsChecked = settings.IgnoreFullscreen;
         StartWithWindows.IsChecked = settings.StartWithWindows;
     }
@@ -197,6 +200,7 @@ public partial class SettingsWindow : Window
         _settings.Radius = RadiusSlider.Value;
         _settings.ItemSize = SizeSlider.Value;
         _settings.InvertScroll = InvertScroll.IsChecked == true;
+        _settings.RemoveSymbol = (SymbolPicker.SelectedItem as SymbolRow)?.Value ?? RemoveSymbol.Minus;
         _settings.IgnoreFullscreen = IgnoreFullscreen.IsChecked == true;
         _settings.StartWithWindows = StartWithWindows.IsChecked == true;
 
@@ -316,6 +320,13 @@ public sealed class ItemRow : Observable
         get => _name;
         set { _name = value; Raise(nameof(Name)); }
     }
+}
+
+public sealed class SymbolRow(RemoveSymbol value)
+{
+    public RemoveSymbol Value { get; } = value;
+    public string Glyph { get; } = RemoveSymbols.Glyph(value);
+    public string Label { get; } = RemoveSymbols.Label(value);
 }
 
 public sealed class MonitorRow(string deviceName, string label)
