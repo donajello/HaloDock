@@ -41,8 +41,8 @@ public sealed class LaunchItem
 /// <summary>Symbol on the drop target that takes a held icon off the ring.</summary>
 public enum RemoveSymbol
 {
-    Minus,
     Unpin,
+    Minus,
     Hide,
     Unstar,
     Cross,
@@ -55,20 +55,35 @@ public static class RemoveSymbols
 
     public static string Glyph(RemoveSymbol symbol) => symbol switch
     {
-        RemoveSymbol.Unpin => "",
+        RemoveSymbol.Minus => "",
         RemoveSymbol.Hide => "",
         RemoveSymbol.Unstar => "",
         RemoveSymbol.Cross => "",
-        _ => "",
+        _ => "", // unpin
     };
+
+    /// <summary>The matching "add" symbol, shown where dragged-in files will be added.</summary>
+    public static string AddGlyph(RemoveSymbol symbol) => symbol switch
+    {
+        RemoveSymbol.Unpin => "", // pin
+        RemoveSymbol.Hide => "",  // eye
+        RemoveSymbol.Unstar => "", // star
+        _ => "",                  // plus
+    };
+
+    public static string RemoveText(RemoveSymbol symbol) =>
+        symbol == RemoveSymbol.Unpin ? "Unpin from ring" : "Remove from ring";
+
+    public static string AddText(RemoveSymbol symbol) =>
+        symbol == RemoveSymbol.Unpin ? "Pin to ring" : "Add to ring";
 
     public static string Label(RemoveSymbol symbol) => symbol switch
     {
-        RemoveSymbol.Unpin => "Unpin",
-        RemoveSymbol.Hide => "Eye with a slash",
-        RemoveSymbol.Unstar => "Star with a slash",
-        RemoveSymbol.Cross => "Cross",
-        _ => "Minus",
+        RemoveSymbol.Minus => "Minus / plus",
+        RemoveSymbol.Hide => "Eye with a slash / eye",
+        RemoveSymbol.Unstar => "Star with a slash / star",
+        RemoveSymbol.Cross => "Cross / plus",
+        _ => "Unpin / pin",
     };
 }
 
@@ -110,7 +125,7 @@ public sealed class AppSettings
     public double Radius { get; set; } = 190;
     public double ItemSize { get; set; } = 72;
     public bool InvertScroll { get; set; }
-    public RemoveSymbol RemoveSymbol { get; set; } = RemoveSymbol.Minus;
+    public RemoveSymbol RemoveSymbol { get; set; } = RemoveSymbol.Unpin;
     public bool IgnoreFullscreen { get; set; } = true;
     public bool StartWithWindows { get; set; }
 

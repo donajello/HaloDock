@@ -326,6 +326,7 @@ public sealed class SymbolRow(RemoveSymbol value)
 {
     public RemoveSymbol Value { get; } = value;
     public string Glyph { get; } = RemoveSymbols.Glyph(value);
+    public string AddGlyph { get; } = RemoveSymbols.AddGlyph(value);
     public string Label { get; } = RemoveSymbols.Label(value);
 }
 

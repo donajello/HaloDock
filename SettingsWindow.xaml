@@ -152,20 +152,22 @@
               <Slider x:Name="SizeSlider" Minimum="40" Maximum="128" TickFrequency="4" IsSnapToTickEnabled="True"/>
             </DockPanel>
 
-            <TextBlock Style="{StaticResource Heading}" Text="Remove-from-ring symbol"/>
+            <TextBlock Style="{StaticResource Heading}" Text="Remove / add symbols"/>
             <ComboBox x:Name="SymbolPicker" HorizontalAlignment="Left" MinWidth="220">
               <ComboBox.ItemTemplate>
                 <DataTemplate>
                   <StackPanel Orientation="Horizontal">
                     <TextBlock Text="{Binding Glyph}" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="16"
-                               Width="28" VerticalAlignment="Center"/>
+                               Width="24" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding AddGlyph}" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="16"
+                               Width="32" VerticalAlignment="Center"/>
                     <TextBlock Text="{Binding Label}" VerticalAlignment="Center"/>
                   </StackPanel>
                 </DataTemplate>
               </ComboBox.ItemTemplate>
             </ComboBox>
             <TextBlock Style="{StaticResource Hint}"
-                       Text="Appears in the middle of the menu while you hold an icon. Dropping the icon there takes it off the ring; the file itself is never touched."/>
+                       Text="The first appears in the middle of the menu while you hold an icon: drop it there to take it off the ring (the file itself is never touched). The second marks where files dragged in from Explorer will be added."/>
 
             <CheckBox x:Name="InvertScroll" Content="Reverse scroll direction" Margin="0,18,0,6"/>
             <CheckBox x:Name="IgnoreFullscreen" Content="Don't open over full-screen apps and games" Margin="0,6"/>

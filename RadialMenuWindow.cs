@@ -114,7 +114,13 @@ public sealed class RadialMenuWindow : Window
     readonly Ellipse _trashCircle;
     readonly TextBlock _trashGlyph;
     readonly ScaleTransform _trashScale = new();
+    readonly Border _trashLabel;
     double _trashShow, _trashHover;
+
+    // Its counterpart: marks the gap where dragged-in files will be added.
+    readonly Grid _addMarker;
+    readonly Ellipse _addCircle;
+    readonly TextBlock _addGlyph;
     bool _overTrash;
     double _lastAutoScroll;
 
@@ -181,30 +187,22 @@ public sealed class RadialMenuWindow : Window
         Panel.SetZIndex(_dotLabel, 9000);
         _canvas.Children.Add(_dotLabel);
 
-        _gapLabel = MakeTag(new TextBlock { FontSize = 12, Text = "Add to ring" });
+        _gapLabel = MakeTag(new TextBlock { FontSize = 12 });
         Panel.SetZIndex(_gapLabel, 9000);
         _canvas.Children.Add(_gapLabel);
 
-        _trashCircle = new Ellipse { Width = TrashSize, Height = TrashSize };
-        _trashGlyph = new TextBlock
-        {
-            FontFamily = new FontFamily(RemoveSymbols.Font),
-            FontSize = 17,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        _trash = new Grid
-        {
-            Width = TrashSize,
-            Height = TrashSize,
-            IsHitTestVisible = false,
-            Visibility = Visibility.Collapsed,
-            RenderTransformOrigin = new Point(0.5, 0.5),
-            RenderTransform = _trashScale,
-            Children = { _trashCircle, _trashGlyph },
-        };
+        _trash = MakeSymbolDisc(out _trashCircle, out _trashGlyph);
+        _trash.RenderTransform = _trashScale;
         Panel.SetZIndex(_trash, 7000); // under the held icon, over everything else
         _canvas.Children.Add(_trash);
+
+        _trashLabel = MakeTag(new TextBlock { FontSize = 12 });
+        Panel.SetZIndex(_trashLabel, 9000);
+        _canvas.Children.Add(_trashLabel);
+
+        _addMarker = MakeSymbolDisc(out _addCircle, out _addGlyph);
+        Panel.SetZIndex(_addMarker, 7000);
+        _canvas.Children.Add(_addMarker);
         Content = _canvas;
 
         SourceInitialized += (_, _) =>
@@ -225,6 +223,28 @@ public sealed class RadialMenuWindow : Window
         DragOver += OnDragOver;
         DragLeave += (_, _) => EndExternalDrag();
         Drop += OnDrop;
+    }
+
+    /// <summary>A plain disc with an icon-font symbol: the remove target and the add marker.</summary>
+    static Grid MakeSymbolDisc(out Ellipse circle, out TextBlock glyph)
+    {
+        circle = new Ellipse { Width = TrashSize, Height = TrashSize };
+        glyph = new TextBlock
+        {
+            FontFamily = new FontFamily(RemoveSymbols.Font),
+            FontSize = 17,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        return new Grid
+        {
+            Width = TrashSize,
+            Height = TrashSize,
+            IsHitTestVisible = false,
+            Visibility = Visibility.Collapsed,
+            RenderTransformOrigin = new Point(0.5, 0.5),
+            Children = { circle, glyph },
+        };
     }
 
     static Border MakeTag(TextBlock text) => new()
@@ -314,11 +334,19 @@ public sealed class RadialMenuWindow : Window
     void ApplyPalette()
     {
         _palette = Theme.IsDark ? DarkPalette : LightPalette;
-        foreach (var tag in new[] { _dotLabel, _gapLabel })
+        foreach (var tag in new[] { _dotLabel, _gapLabel, _trashLabel })
         {
             tag.Background = _palette.TagBackground;
             ((TextBlock)tag.Child).Foreground = _palette.TagText;
         }
+        // Remove and add use a matching pair of symbols and words (unpin/pin, minus/plus, ...).
+        var symbol = _settings.RemoveSymbol;
+        ((TextBlock)_gapLabel.Child).Text = RemoveSymbols.AddText(symbol);
+        ((TextBlock)_trashLabel.Child).Text = RemoveSymbols.RemoveText(symbol);
+        _trashGlyph.Text = RemoveSymbols.Glyph(symbol);
+        _addGlyph.Text = RemoveSymbols.AddGlyph(symbol);
+        _addCircle.Fill = _palette.TagBackground;
+        _addGlyph.Foreground = _palette.TagText;
         StyleTrash();
     }
 
@@ -326,7 +354,6 @@ public sealed class RadialMenuWindow : Window
     {
         _trashCircle.Fill = _overTrash ? DangerFill : _palette.TagBackground;
         _trashGlyph.Foreground = _overTrash ? Brushes.White : _palette.TagText;
-        _trashGlyph.Text = RemoveSymbols.Glyph(_settings.RemoveSymbol);
     }
 
     // ---- Rings ----
@@ -726,8 +753,11 @@ public sealed class RadialMenuWindow : Window
         if (wasOverTrash) StyleTrash();
 
         // Dragged-in files held right over a folder or app go into it; the gap stays where it was.
+        // The zone is capped by the spacing between icons, so on a tight ring the gaps stay reachable.
+        var spacing = radius * AngleStepDeg * Math.PI / 180;
+        var dropIntoRadius = Math.Min(itemSize * (hovered >= 0 ? _visuals[hovered].BaseScale : 1) * DropIntoFraction, spacing * 0.3);
         if (_dragging && hovered >= 0 && _visuals[hovered].Item is { } target
-            && hoveredDistance <= itemSize * _visuals[hovered].BaseScale * DropIntoFraction
+            && hoveredDistance <= dropIntoRadius
             && DropTargets.EffectFor(target, _dragFiles, _dragKeys, _dragAllowed) != DragDropEffects.None)
         {
             _dropInto = hovered;
@@ -789,6 +819,18 @@ public sealed class RadialMenuWindow : Window
         Canvas.SetTop(_trash, c.Y - TrashSize / 2);
         _trashScale.ScaleX = _trashScale.ScaleY = (0.6 + 0.4 * _trashShow) * (1 + 0.25 * _trashHover);
         _trash.Opacity = ease * _trashShow;
+
+        // While over it, say what dropping will do, just below the held icon.
+        if (_trashHover < 0.05)
+        {
+            _trashLabel.Visibility = Visibility.Collapsed;
+            return;
+        }
+        _trashLabel.Visibility = Visibility.Visible;
+        _trashLabel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        Canvas.SetLeft(_trashLabel, Math.Max(4, c.X - _trashLabel.DesiredSize.Width / 2));
+        Canvas.SetTop(_trashLabel, c.Y + _settings.ItemSize * 0.5 + 6);
+        _trashLabel.Opacity = ease * _trashHover;
     }
 
     void LayoutDots(double ease, double hoverFollow)
@@ -826,13 +868,22 @@ public sealed class RadialMenuWindow : Window
         if (!_dragging || _gap < 0 || _dropInto >= 0 || ease < 0.5)
         {
             _gapLabel.Visibility = Visibility.Collapsed;
+            _addMarker.Visibility = Visibility.Collapsed;
             return;
         }
+
+        // The add symbol sits in the gap, with its words beside it.
         var angle = (_gap - _offset) * step;
+        var x = radius * Math.Cos(angle);
+        var y = cy + radius * Math.Sin(angle);
+        _addMarker.Visibility = Visibility.Visible;
+        Canvas.SetLeft(_addMarker, x - TrashSize / 2);
+        Canvas.SetTop(_addMarker, y - TrashSize / 2);
+
         _gapLabel.Visibility = Visibility.Visible;
         _gapLabel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        Canvas.SetLeft(_gapLabel, radius * Math.Cos(angle) - _gapLabel.DesiredSize.Width / 2);
-        Canvas.SetTop(_gapLabel, cy + radius * Math.Sin(angle) - _gapLabel.DesiredSize.Height / 2);
+        Canvas.SetLeft(_gapLabel, x + TrashSize / 2 + 8);
+        Canvas.SetTop(_gapLabel, y - _gapLabel.DesiredSize.Height / 2);
     }
 
     void LayoutLabel(ItemVisual v, bool hovered, double iconSize, int z, double opacity)
@@ -972,9 +1023,9 @@ public sealed class RadialMenuWindow : Window
         NativeMethods.GetCursorPos(out var p);
         var invoked = false;
         if (item.Exists)
-            invoked = ShellContextMenu.Show(item.Path, p.X, p.Y, ("Remove from ring", () => remove = true));
+            invoked = ShellContextMenu.Show(item.Path, p.X, p.Y, (RemoveSymbols.RemoveText(_settings.RemoveSymbol), () => remove = true));
         else
-            ShellContextMenu.ShowSimpleMenu(("Remove from ring", false, () => remove = true));
+            ShellContextMenu.ShowSimpleMenu((RemoveSymbols.RemoveText(_settings.RemoveSymbol), false, () => remove = true));
         _contextMenuOpen = false;
         _outsideFor = 0;
 
@@ -1066,7 +1117,8 @@ public sealed class RadialMenuWindow : Window
     /// <summary>
     /// Debug aid (<c>HaloDock.exe --snapshot out.png [hoverIndex]</c>): renders the fully-open wheel
     /// over a plain background without touching the screen. A negative index -N hovers ring dot N-2;
-    /// 100+N shows item N picked up and held over the gap after it; 200+N shows it held over the remove target.
+    /// 100+N shows item N picked up and held over the gap after it; 200+N shows it held over the remove target;
+    /// 300+N shows a file dragged in from outside, held in the gap before item N.
     /// </summary>
     public BitmapSource RenderSnapshot(int width, int height, int hoverIndex)
     {
@@ -1082,7 +1134,16 @@ public sealed class RadialMenuWindow : Window
         // Aim the pointer at the requested item or dot, then let the animations settle.
         Layout(0, new Point(-1000, -1000), height, cy, true);
         var cursor = new Point(-1000, -1000);
-        if (hoverIndex >= 200 && hoverIndex - 200 < _visuals.Count)
+        if (hoverIndex >= 300)
+        {
+            // Pretend a file is being dragged in from Explorer and held in the gap before item N.
+            _dragging = true;
+            _dragFiles = [Environment.GetFolderPath(Environment.SpecialFolder.Windows)];
+            _dragAllowed = DragDropEffects.Copy | DragDropEffects.Link;
+            var a = (hoverIndex - 300 - 0.5 - _offset) * AngleStepDeg * Math.PI / 180;
+            cursor = new Point(_settings.Radius * Math.Cos(a), cy + _settings.Radius * Math.Sin(a));
+        }
+        else if (hoverIndex >= 200 && hoverIndex - 200 < _visuals.Count)
         {
             Lift(hoverIndex - 200);
             cursor = TrashCenter(cy);

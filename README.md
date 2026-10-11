@@ -40,8 +40,8 @@ Windows SmartScreen may warn the first time, since the exe isn't code-signed. Ch
 | Left-click an icon | Open it |
 | Right-click an icon | Windows context menu, plus **Remove from ring** |
 | Hold an icon, or press and drag it | Pick it up; the others part to show where it'll land. Let go off the ring to cancel |
-| Drop a held icon on the − in the middle | Take it off the ring (the file isn't touched). The symbol can be changed in Settings |
-| Drag files into a gap between icons | Add them to the ring there |
+| Drop a held icon on the unpin symbol in the middle | Take it off the ring (the file isn't touched) |
+| Drag files into a gap between icons | Pin them to the ring there (a pin marks the spot). The unpin/pin symbols can be changed in Settings |
 | Drag files onto a folder or app icon | Move or copy into the folder, or open with the app |
 | Move away | Wheel closes |
 
