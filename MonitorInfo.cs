@@ -3,7 +3,7 @@ using System.Linq;
 using Drawing = System.Drawing;
 using Forms = System.Windows.Forms;
 
-namespace EdgeDock;
+namespace HaloDock;
 
 public sealed class MonitorInfo
 {

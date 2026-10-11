@@ -2,7 +2,7 @@ using System;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
 
-namespace EdgeDock;
+namespace HaloDock;
 
 /// <summary>Follows the Windows light/dark app theme.</summary>
 public static class Theme

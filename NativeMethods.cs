@@ -2,7 +2,7 @@ using System;
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace EdgeDock;
+namespace HaloDock;
 
 internal static class NativeMethods
 {

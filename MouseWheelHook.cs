@@ -1,7 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace EdgeDock;
+namespace HaloDock;
 
 /// <summary>
 /// Low-level mouse hook, installed only while the menu is open. The overlay never takes focus,

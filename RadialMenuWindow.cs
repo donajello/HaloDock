@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -10,13 +11,16 @@ using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using Drawing = System.Drawing;
 
-namespace EdgeDock;
+namespace HaloDock;
 
 /// <summary>
 /// Transparent, non-activating overlay that fans the items' icons out in a half-wheel against a monitor's
 /// left edge. Items shrink toward the top and bottom until they slide off behind the edge.
 /// A smaller inner arc of coloured dots switches between saved rings (item sets).
-/// Files dragged onto an icon are moved/copied into a folder or opened with an app.
+///
+/// Editing works like a phone home screen: long-press (or press and drag) an icon to pick it up and the
+/// others part to show where it will land. Files dragged in from Explorer can be dropped onto a folder/app
+/// icon (move/copy/open with) or into a gap between icons to add them to the ring.
 /// </summary>
 public sealed class RadialMenuWindow : Window
 {
@@ -32,13 +36,19 @@ public sealed class RadialMenuWindow : Window
     const double RingSwitchSeconds = 0.16;
     const double LeaveGraceSeconds = 0.12;
 
+    const double LongPressSeconds = 0.35;
+    const double DragStartDistance = 8;    // DIP the pointer can move before a press becomes a drag
+    const double DropIntoFraction = 0.42;  // within this much of an icon's size from its centre = drop onto it
+    const double AutoScrollAngleDeg = 62;  // dragging past this angle scrolls the wheel
+    const double AutoScrollSeconds = 0.35;
+
     const double InnerRadiusFactor = 0.42; // inner dot ring radius, relative to the item ring
     const double DotSize = 12;
     const double DotHoverGrow = 0.5;
     const double DotStepDeg = 20;
     const double DotMaxSpanDeg = 140;
 
-    // Alpha 1 is invisible but still catches the mouse, so clicks on an icon's transparent pixels don't fall through.
+    // Alpha 1 is invisible but still catches the mouse (and drag-and-drop), so nothing falls through the wheel.
     static readonly Brush HitArea = Frozen(new SolidColorBrush(Color.FromArgb(0x01, 0, 0, 0)));
 
     sealed record Palette(Brush Plate, Brush TagBackground, Brush TagText);
@@ -56,10 +66,13 @@ public sealed class RadialMenuWindow : Window
     Palette _palette = DarkPalette;
 
     readonly Canvas _canvas = new();
+    readonly EllipseGeometry _hitGeometry = new();
+    readonly Path _hitDisk;
     readonly EllipseGeometry _arcGeometry = new();
     readonly Path _arc;
     readonly Border _dotLabel;
     readonly TextBlock _dotLabelText;
+    readonly Border _gapLabel;
     readonly List<ItemVisual> _visuals = new();
     readonly List<DotVisual> _dots = new();
     readonly Dictionary<int, int> _ringCenters = new(); // which item each ring was last centred on
@@ -73,13 +86,31 @@ public sealed class RadialMenuWindow : Window
     int _targetWidthPx;
     int _anchorY;
     double _offset, _targetOffset, _open, _itemsIn, _outsideFor, _lastFrame, _hubDistance;
-    bool _isOpen, _closing, _cursorInside, _rendering, _dragging, _contextMenuOpen;
-    DragDropEffects _dragEffect;
+    bool _isOpen, _closing, _cursorInside, _rendering, _contextMenuOpen;
     int _wheelAccum, _hovered = -1, _hoveredDot = -1, _ring;
+    Point _cursor;
+    double _cursorSlot;
+
+    // Pressing/rearranging an icon.
+    int _pressIndex = -1, _liftedIndex = -1;
+    double _pressTime;
+    Point _pressPoint;
+
+    // Files dragged in from outside.
+    bool _dragging;
+    string[] _dragFiles = [];
+    DragDropKeyStates _dragKeys;
+    DragDropEffects _dragAllowed;
+
+    // Where a drag would land: a gap at this position in the ring, or onto this item.
+    int _gap = -1, _dropInto = -1;
+    double _lastAutoScroll;
 
     public event Action<LaunchItem>? ItemInvoked;
     public event Action<LaunchItem, string[], DragDropEffects>? FilesDropped;
     public event Action<int>? ActiveRingChanged;
+    /// <summary>Items were added, removed or rearranged from inside the menu.</summary>
+    public event Action? RingEdited;
     public event Action? SettingsRequested;
     public event Action? Hidden;
 
@@ -101,6 +132,8 @@ public sealed class RadialMenuWindow : Window
 
     bool ShowDots => _settings.Rings.Count > 1;
 
+    bool Busy => _liftedIndex >= 0 || _dragging;
+
     public RadialMenuWindow(AppSettings settings)
     {
         _settings = settings;
@@ -114,7 +147,12 @@ public sealed class RadialMenuWindow : Window
         Topmost = true;
         Focusable = false;
         AllowDrop = true;
-        Title = "EdgeDock";
+        Title = "HaloDock";
+
+        // Invisible disk covering the whole wheel, so gaps between icons still receive clicks and drops.
+        _hitDisk = new Path { Data = _hitGeometry, Fill = HitArea };
+        Panel.SetZIndex(_hitDisk, -2);
+        _canvas.Children.Add(_hitDisk);
 
         // Thin semicircle the icons ride on. It's a full circle centred on the screen edge; the left half is off-window.
         _arc = new Path
@@ -127,16 +165,13 @@ public sealed class RadialMenuWindow : Window
         _canvas.Children.Add(_arc);
 
         _dotLabelText = new TextBlock { FontSize = 12 };
-        _dotLabel = new Border
-        {
-            CornerRadius = new CornerRadius(4),
-            Padding = new Thickness(6, 2, 6, 3),
-            IsHitTestVisible = false,
-            Visibility = Visibility.Collapsed,
-            Child = _dotLabelText,
-        };
+        _dotLabel = MakeTag(_dotLabelText);
         Panel.SetZIndex(_dotLabel, 9000);
         _canvas.Children.Add(_dotLabel);
+
+        _gapLabel = MakeTag(new TextBlock { FontSize = 12, Text = "Add to ring" });
+        Panel.SetZIndex(_gapLabel, 9000);
+        _canvas.Children.Add(_gapLabel);
         Content = _canvas;
 
         SourceInitialized += (_, _) =>
@@ -149,13 +184,24 @@ public sealed class RadialMenuWindow : Window
         _hwnd = new WindowInteropHelper(this).EnsureHandle();
 
         _hook.Wheel = OnWheel;
-        MouseLeftButtonUp += OnLeftClick;
+        MouseLeftButtonDown += OnLeftDown;
+        MouseLeftButtonUp += OnLeftUp;
         MouseRightButtonUp += OnRightClick;
+        LostMouseCapture += (_, _) => CancelPress();
         DragEnter += OnDragOver;
         DragOver += OnDragOver;
-        DragLeave += (_, _) => _dragging = false;
+        DragLeave += (_, _) => EndExternalDrag();
         Drop += OnDrop;
     }
+
+    static Border MakeTag(TextBlock text) => new()
+    {
+        CornerRadius = new CornerRadius(4),
+        Padding = new Thickness(6, 2, 6, 3),
+        IsHitTestVisible = false,
+        Visibility = Visibility.Collapsed,
+        Child = text,
+    };
 
     /// <summary>Opens the wheel on <paramref name="monitor"/>, centred vertically on the pointer.</summary>
     public void Open(MonitorInfo monitor, Drawing.Point cursor)
@@ -168,7 +214,7 @@ public sealed class RadialMenuWindow : Window
         var widthDip = _settings.Radius + _settings.ItemSize * (1 + HoverGrow) + LabelRoom;
         _targetWidthPx = (int)Math.Ceiling(widthDip * monitor.Scale);
 
-        _palette = Theme.IsDark ? DarkPalette : LightPalette;
+        ApplyPalette();
         _ring = Math.Clamp(_settings.ActiveRing, 0, _settings.Rings.Count - 1);
         RebuildItems();
         RebuildDots();
@@ -176,8 +222,9 @@ public sealed class RadialMenuWindow : Window
         _itemsIn = 1;
         _outsideFor = 0;
         _wheelAccum = 0;
-        _hovered = -1;
-        _hoveredDot = -1;
+        _hovered = _hoveredDot = -1;
+        _pressIndex = _liftedIndex = -1;
+        _gap = _dropInto = -1;
         _dragging = false;
         _closing = false;
         _isOpen = true;
@@ -205,6 +252,7 @@ public sealed class RadialMenuWindow : Window
             _rendering = false;
         }
         _hook.Uninstall();
+        if (IsMouseCaptured) ReleaseMouseCapture();
         Hide();
         _isOpen = false;
         _closing = false;
@@ -228,6 +276,18 @@ public sealed class RadialMenuWindow : Window
         if (_isOpen) Dispatcher.BeginInvoke(Place);
     }
 
+    void ApplyPalette()
+    {
+        _palette = Theme.IsDark ? DarkPalette : LightPalette;
+        foreach (var tag in new[] { _dotLabel, _gapLabel })
+        {
+            tag.Background = _palette.TagBackground;
+            ((TextBlock)tag.Child).Foreground = _palette.TagText;
+        }
+    }
+
+    // ---- Rings ----
+
     void SwitchRing(int ring)
     {
         ring = Math.Clamp(ring, 0, _settings.Rings.Count - 1);
@@ -242,7 +302,8 @@ public sealed class RadialMenuWindow : Window
         ActiveRingChanged?.Invoke(ring);
     }
 
-    void RebuildItems()
+    /// <summary>Recreates the item visuals for the current ring. With <paramref name="keepOffset"/> the wheel doesn't jump.</summary>
+    void RebuildItems(bool keepOffset = false)
     {
         _arc.Stroke = Frozen(new SolidColorBrush(RingColor(CurrentRing, 0xC0)));
 
@@ -267,21 +328,29 @@ public sealed class RadialMenuWindow : Window
                 _visuals.Add(CreateVisual(item, size, ShellIcons.Get(item.Path, iconPx)));
         }
 
-        foreach (var v in _visuals)
+        for (var i = 0; i < _visuals.Count; i++)
         {
-            _canvas.Children.Add(v.Root);
-            _canvas.Children.Add(v.Label);
+            _visuals[i].Slot = i;
+            _canvas.Children.Add(_visuals[i].Root);
+            _canvas.Children.Add(_visuals[i].Label);
         }
 
-        _targetOffset = _offset = Math.Clamp(_ringCenters.GetValueOrDefault(_ring), 0, Math.Max(0, _visuals.Count - 1));
+        var max = Math.Max(0, _visuals.Count - 1);
+        if (keepOffset)
+        {
+            _offset = Math.Clamp(_offset, 0, max);
+            _targetOffset = Math.Clamp(_targetOffset, 0, max);
+        }
+        else
+        {
+            _targetOffset = _offset = Math.Clamp(_ringCenters.GetValueOrDefault(_ring), 0, max);
+        }
     }
 
     void RebuildDots()
     {
         foreach (var d in _dots) _canvas.Children.Remove(d.Shape);
         _dots.Clear();
-        _dotLabel.Background = _palette.TagBackground;
-        _dotLabelText.Foreground = _palette.TagText;
         if (!ShowDots) return;
 
         foreach (var ring in _settings.Rings)
@@ -348,19 +417,20 @@ public sealed class RadialMenuWindow : Window
         }
 
         var scale = new ScaleTransform();
+        var rotate = new RotateTransform();
         var root = new Grid
         {
             Width = size,
             Height = size,
             Background = HitArea,
             RenderTransformOrigin = new Point(0.5, 0.5),
-            RenderTransform = scale,
+            RenderTransform = new TransformGroup { Children = { scale, rotate } },
             Children = { plate, content },
         };
 
         var labelText = new TextBlock
         {
-            Text = item?.DisplayName ?? "Add items…",
+            Text = item?.DisplayName ?? "Add itemsâ€¦",
             Foreground = _palette.TagText,
             FontSize = 12,
             MaxWidth = 240,
@@ -378,8 +448,10 @@ public sealed class RadialMenuWindow : Window
             Child = labelText,
         };
 
-        return new ItemVisual(item, root, plate, scale, label, labelText, labelScale, item == null || item.Exists, icon == null);
+        return new ItemVisual(item, root, plate, scale, rotate, label, labelText, labelScale, item == null || item.Exists, icon == null);
     }
+
+    // ---- Frame loop ----
 
     void OnRendering(object? sender, EventArgs e)
     {
@@ -404,9 +476,17 @@ public sealed class RadialMenuWindow : Window
         }
         _itemsIn = Math.Min(1, _itemsIn + dt / RingSwitchSeconds);
 
+        // A press turns into a pick-up after a moment, or as soon as the pointer moves.
+        if (_pressIndex >= 0 && _liftedIndex < 0)
+        {
+            var moved = (_cursor - _pressPoint).Length;
+            if (now - _pressTime >= LongPressSeconds || moved > DragStartDistance) Lift(_pressIndex);
+        }
+
         LayoutFromWindow(dt);
 
-        if (!_closing && !_contextMenuOpen)
+        // Keep the wheel open while something is held, even if the pointer strays.
+        if (!_closing && !_contextMenuOpen && _pressIndex < 0 && _liftedIndex < 0)
         {
             _outsideFor = _cursorInside ? 0 : _outsideFor + dt;
             if (_outsideFor > LeaveGraceSeconds) _closing = true;
@@ -428,6 +508,8 @@ public sealed class RadialMenuWindow : Window
 
     void Layout(double dt, Point cursor, double height, double anchorY, bool onMonitor)
     {
+        _cursor = cursor;
+        var now = _clock.Elapsed.TotalSeconds;
         var radius = _settings.Radius;
         var itemSize = _settings.ItemSize;
 
@@ -438,15 +520,23 @@ public sealed class RadialMenuWindow : Window
         var ease = 1 - Math.Pow(1 - _open, 3);
         var itemsEase = 1 - Math.Pow(1 - _itemsIn, 3);
         var follow = dt > 0 ? 1 - Math.Exp(-dt * 16) : 1;
+        var slotFollow = dt > 0 ? 1 - Math.Exp(-dt * 18) : 1;
+        var hoverFollow = dt > 0 ? 1 - Math.Exp(-dt * 22) : 1;
         _offset += (_targetOffset - _offset) * follow;
         if (Math.Abs(_targetOffset - _offset) < 0.001) _offset = _targetOffset;
 
+        var outer = radius + itemSize * (0.5 + HoverGrow) + 16;
+        _hitGeometry.Center = new Point(0, cy);
+        _hitGeometry.RadiusX = _hitGeometry.RadiusY = outer * ease;
         _arcGeometry.Center = new Point(0, cy);
         _arcGeometry.RadiusX = _arcGeometry.RadiusY = radius * ease;
         _arc.Opacity = ease;
 
         var hubDy = cursor.Y - cy;
         _hubDistance = Math.Sqrt(cursor.X * cursor.X + hubDy * hubDy);
+        var step = AngleStepDeg * Math.PI / 180;
+        var cursorAngle = Math.Atan2(hubDy, Math.Max(cursor.X, 0.001));
+        _cursorSlot = cursorAngle / step + _offset;
 
         // Inner ring: one dot per saved ring.
         var hoveredDot = -1;
@@ -461,9 +551,7 @@ public sealed class RadialMenuWindow : Window
                 var angle = (i - (_dots.Count - 1) / 2.0) * dotStep;
                 d.X = rIn * Math.Cos(angle);
                 d.Y = cy + rIn * Math.Sin(angle);
-                var dx = cursor.X - d.X;
-                var dy = cursor.Y - d.Y;
-                var distance = Math.Sqrt(dx * dx + dy * dy);
+                var distance = (cursor - new Point(d.X, d.Y)).Length;
                 if (distance <= DotSize * (1 + DotHoverGrow * d.Hover) / 2 + 4 && distance < bestDot)
                 {
                     bestDot = distance;
@@ -472,15 +560,32 @@ public sealed class RadialMenuWindow : Window
             }
         }
 
-        // Outer ring: place items on the arc and find which one the pointer is over.
-        var step = AngleStepDeg * Math.PI / 180;
+        // Slots: each item's place on the arc. While dragging, the held item leaves its slot and
+        // everything from the gap onward shifts one place along to make room.
+        var ordered = 0;
+        for (var i = 0; i < _visuals.Count; i++)
+        {
+            var v = _visuals[i];
+            v.InOrder = i != _liftedIndex && !(Busy && v.Item == null); // the "+" placeholder hides during drags
+            if (!v.InOrder) continue;
+            v.TargetSlot = _gap >= 0 && ordered >= _gap ? ordered + 1 : ordered;
+            v.Slot += (v.TargetSlot - v.Slot) * slotFollow;
+            ordered++;
+        }
+
+        // Place items on the arc and find which one the pointer is over.
         var limit = Math.PI / 2 + step * 0.6;
         var hovered = -1;
         var bestDistance = double.MaxValue;
         for (var i = 0; i < _visuals.Count; i++)
         {
             var v = _visuals[i];
-            var angle = (i - _offset) * step;
+            if (!v.InOrder)
+            {
+                v.Visible = false;
+                continue;
+            }
+            var angle = (v.Slot - _offset) * step;
             v.Visible = Math.Abs(angle) <= limit;
             if (!v.Visible) continue;
 
@@ -490,9 +595,7 @@ public sealed class RadialMenuWindow : Window
             v.Y = cy + r * Math.Sin(angle);
             v.BaseScale = (MinScale + (1 - MinScale) * v.Falloff) * (0.6 + 0.4 * ease) * (0.7 + 0.3 * itemsEase);
 
-            var dx = cursor.X - v.X;
-            var dy = cursor.Y - v.Y;
-            var distance = Math.Sqrt(dx * dx + dy * dy);
+            var distance = (cursor - new Point(v.X, v.Y)).Length;
             var hitRadius = itemSize * v.BaseScale * (1 + HoverGrow * v.Hover) / 2;
             if (distance <= hitRadius && distance < bestDistance)
             {
@@ -501,13 +604,17 @@ public sealed class RadialMenuWindow : Window
             }
         }
         if (_contextMenuOpen) return; // keep the right-clicked item highlighted while its menu is up
-        _hovered = _closing || hoveredDot >= 0 ? -1 : hovered;
-        _hoveredDot = _closing ? -1 : hoveredDot;
 
-        _cursorInside = onMonitor && _hubDistance <= radius + itemSize * (0.5 + HoverGrow) + 16;
+        UpdateDropTarget(hovered, bestDistance, itemSize, radius, onMonitor, cursorAngle, ordered, now);
 
-        var hoverFollow = dt > 0 ? 1 - Math.Exp(-dt * 22) : 1;
+        _hovered = _closing || hoveredDot >= 0 || _liftedIndex >= 0 ? -1
+            : _dragging ? _dropInto
+            : hovered;
+        _hoveredDot = _closing || Busy ? -1 : hoveredDot;
+        _cursorInside = onMonitor && _hubDistance <= outer;
+
         LayoutDots(ease, hoverFollow);
+        LayoutGapLabel(ease, cy, radius, step);
 
         for (var i = 0; i < _visuals.Count; i++)
         {
@@ -515,6 +622,13 @@ public sealed class RadialMenuWindow : Window
             v.Hover += ((i == _hovered ? 1 : 0) - v.Hover) * hoverFollow;
             var dimTarget = _hovered >= 0 && i != _hovered ? 1 : 0;
             v.Dim += (dimTarget - v.Dim) * hoverFollow;
+
+            if (i == _liftedIndex)
+            {
+                LayoutLifted(v, itemSize, now);
+                continue;
+            }
+            v.Rotate.Angle = 0;
 
             if (!v.Visible)
             {
@@ -535,12 +649,68 @@ public sealed class RadialMenuWindow : Window
             Canvas.SetLeft(v.Root, v.X - itemSize / 2);
             Canvas.SetTop(v.Root, v.Y - itemSize / 2);
             Panel.SetZIndex(v.Root, z);
-            v.ScaleTransform.ScaleX = v.ScaleTransform.ScaleY = s;
+            v.Scale.ScaleX = v.Scale.ScaleY = s;
             if (!v.AlwaysPlate) v.Plate.Opacity = v.Hover;
             v.Root.Opacity = opacity;
 
             LayoutLabel(v, i == _hovered, itemSize * s, z, opacity);
         }
+    }
+
+    /// <summary>Works out where a held icon or dragged-in files would land, and scrolls near the ends.</summary>
+    void UpdateDropTarget(int hovered, double hoveredDistance, double itemSize, double radius, bool onMonitor,
+        double cursorAngle, int ordered, double now)
+    {
+        if (!Busy || _closing)
+        {
+            _gap = _dropInto = -1;
+            return;
+        }
+
+        // Dragged-in files held right over a folder or app go into it; the gap stays where it was.
+        if (_dragging && hovered >= 0 && _visuals[hovered].Item is { } target
+            && hoveredDistance <= itemSize * _visuals[hovered].BaseScale * DropIntoFraction
+            && DropTargets.EffectFor(target, _dragFiles, _dragKeys, _dragAllowed) != DragDropEffects.None)
+        {
+            _dropInto = hovered;
+            return;
+        }
+        _dropInto = -1;
+
+        var inBand = onMonitor && Math.Abs(_hubDistance - radius) <= itemSize * 0.9;
+        if (!inBand)
+        {
+            _gap = -1; // let go out here and nothing changes
+            return;
+        }
+
+        // Insert before the first item that sits past the pointer.
+        var gap = 0;
+        foreach (var v in _visuals)
+            if (v.InOrder && v.Slot < _cursorSlot) gap++;
+        _gap = gap;
+
+        if (Math.Abs(cursorAngle) > AutoScrollAngleDeg * Math.PI / 180 && now - _lastAutoScroll > AutoScrollSeconds)
+        {
+            _lastAutoScroll = now;
+            _targetOffset = Math.Clamp(Math.Round(_targetOffset) + Math.Sign(cursorAngle), 0, ordered);
+        }
+    }
+
+    void LayoutLifted(ItemVisual v, double itemSize, double now)
+    {
+        // The held icon follows the pointer, a little larger, with a gentle home-screen wiggle.
+        v.Root.Visibility = Visibility.Visible;
+        Canvas.SetLeft(v.Root, _cursor.X - itemSize / 2);
+        Canvas.SetTop(v.Root, _cursor.Y - itemSize / 2);
+        Panel.SetZIndex(v.Root, 8000);
+        v.Scale.ScaleX = v.Scale.ScaleY = 1.12;
+        v.Rotate.Angle = Math.Sin(now * 18) * 3;
+        v.Plate.Opacity = 1;
+        v.Root.Opacity = _gap >= 0 ? 0.95 : 0.6; // fades when letting go would cancel
+        v.Label.Visibility = Visibility.Collapsed;
+        v.X = _cursor.X;
+        v.Y = _cursor.Y;
     }
 
     void LayoutDots(double ease, double hoverFollow)
@@ -571,6 +741,21 @@ public sealed class RadialMenuWindow : Window
         _dotLabel.Opacity = Math.Min(1, hovered.Hover * 1.5);
     }
 
+    void LayoutGapLabel(double ease, double cy, double radius, double step)
+    {
+        // Only for files coming in from outside; a held icon shows its own landing spot by the gap.
+        if (!_dragging || _gap < 0 || _dropInto >= 0 || ease < 0.5)
+        {
+            _gapLabel.Visibility = Visibility.Collapsed;
+            return;
+        }
+        var angle = (_gap - _offset) * step;
+        _gapLabel.Visibility = Visibility.Visible;
+        _gapLabel.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        Canvas.SetLeft(_gapLabel, radius * Math.Cos(angle) - _gapLabel.DesiredSize.Width / 2);
+        Canvas.SetTop(_gapLabel, cy + radius * Math.Sin(angle) - _gapLabel.DesiredSize.Height / 2);
+    }
+
     void LayoutLabel(ItemVisual v, bool hovered, double iconSize, int z, double opacity)
     {
         if (v.Falloff < LabelMinFalloff && v.Hover < 0.01)
@@ -579,8 +764,9 @@ public sealed class RadialMenuWindow : Window
             return;
         }
 
-        var text = v.Item == null ? "Add items…" : v.Item.DisplayName;
-        if (hovered && _dragging && v.Item != null) text = DropTargets.Describe(v.Item, _dragEffect);
+        var text = v.Item == null ? "Add itemsâ€¦" : v.Item.DisplayName;
+        if (hovered && _dragging && v.Item != null)
+            text = DropTargets.Describe(v.Item, DropTargets.EffectFor(v.Item, _dragFiles, _dragKeys, _dragAllowed));
         if (v.LabelText.Text != text) v.LabelText.Text = text;
 
         v.Label.Visibility = Visibility.Visible;
@@ -593,6 +779,8 @@ public sealed class RadialMenuWindow : Window
         v.Label.Opacity = opacity;
     }
 
+    // ---- Input ----
+
     bool OnWheel(int delta)
     {
         if (!_isOpen || _closing || !_cursorInside || _visuals.Count == 0) return false;
@@ -604,20 +792,41 @@ public sealed class RadialMenuWindow : Window
 
         // Scrolling between the hub and the icons flips through rings; anywhere else turns the item wheel.
         var ringZone = (InnerRadius + _settings.Radius - _settings.ItemSize / 2) / 2;
-        if (ShowDots && _hubDistance < ringZone) SwitchRing(_ring - steps);
-        else _targetOffset = Math.Clamp(Math.Round(_targetOffset) - steps, 0, _visuals.Count - 1);
+        if (ShowDots && !Busy && _hubDistance < ringZone) SwitchRing(_ring - steps);
+        else _targetOffset = Math.Clamp(Math.Round(_targetOffset) - steps, 0, Math.Max(0, _visuals.Count - (Busy ? 0 : 1)));
         return true;
     }
 
-    void OnLeftClick(object sender, MouseButtonEventArgs e)
+    void OnLeftDown(object sender, MouseButtonEventArgs e)
     {
+        if (_closing || _contextMenuOpen || _hoveredDot >= 0 || _hovered < 0 || _visuals[_hovered].Item == null) return;
+        _pressIndex = _hovered;
+        _pressTime = _clock.Elapsed.TotalSeconds;
+        _pressPoint = _cursor;
+        CaptureMouse(); // keep getting the button-up even if the pointer leaves the wheel
+    }
+
+    void OnLeftUp(object sender, MouseButtonEventArgs e)
+    {
+        var pressed = _pressIndex;
+        _pressIndex = -1;
+
+        if (_liftedIndex >= 0)
+        {
+            PutDown(_liftedIndex);
+            if (IsMouseCaptured) ReleaseMouseCapture();
+            return;
+        }
+        if (IsMouseCaptured) ReleaseMouseCapture();
         if (_closing) return;
+
         if (_hoveredDot >= 0)
         {
             SwitchRing(_hoveredDot);
             return;
         }
-        if (_hovered < 0) return;
+        if (_hovered < 0 || (pressed >= 0 && pressed != _hovered)) return;
+
         var item = _visuals[_hovered].Item;
         _targetOffset = _hovered; // re-open centred on what was just used
         _closing = true;
@@ -625,66 +834,151 @@ public sealed class RadialMenuWindow : Window
         else ItemInvoked?.Invoke(item);
     }
 
+    void CancelPress()
+    {
+        _pressIndex = -1;
+        if (_liftedIndex < 0) return;
+        _gap = -1; // capture lost mid-drag (e.g. Alt+Tab): put it back
+        PutDown(_liftedIndex);
+    }
+
+    void Lift(int index)
+    {
+        _liftedIndex = index;
+        _hovered = -1;
+        // The gap starts where the icon was, so nothing moves until the pointer does.
+        _gap = _visuals.Take(index).Count(v => v.Item != null);
+    }
+
+    void PutDown(int from)
+    {
+        var v = _visuals[from];
+        _liftedIndex = -1;
+        v.Slot = _cursorSlot; // glide from where it was let go into its place
+        if (_gap >= 0 && v.Item != null)
+        {
+            var to = Math.Clamp(_gap, 0, _visuals.Count - 1);
+            var items = CurrentRing.Items;
+            items.RemoveAt(from);
+            items.Insert(to, v.Item);
+            _visuals.RemoveAt(from);
+            _visuals.Insert(to, v);
+            if (to != from) RingEdited?.Invoke();
+        }
+        _gap = -1;
+    }
+
     void OnRightClick(object sender, MouseButtonEventArgs e)
     {
-        if (_closing || _contextMenuOpen || _hovered < 0 || _visuals[_hovered].Item is not { } item || !item.Exists) return;
+        if (_closing || _contextMenuOpen || Busy || _hovered < 0 || _visuals[_hovered].Item is not { } item) return;
         e.Handled = true;
+        var index = _hovered;
+        var remove = false;
 
         // TrackPopupMenu runs a modal loop; rendering keeps going, so freeze hover/close until it returns.
         _contextMenuOpen = true;
         NativeMethods.GetCursorPos(out var p);
-        var invoked = ShellContextMenu.Show(item.Path, p.X, p.Y);
+        var invoked = false;
+        if (item.Exists)
+            invoked = ShellContextMenu.Show(item.Path, p.X, p.Y, ("Remove from ring", () => remove = true));
+        else
+            ShellContextMenu.ShowSimpleMenu(("Remove from ring", false, () => remove = true));
         _contextMenuOpen = false;
+        _outsideFor = 0;
 
-        if (invoked)
+        if (remove)
+        {
+            CurrentRing.Items.RemoveAt(index);
+            RebuildItems(keepOffset: true);
+            RingEdited?.Invoke();
+        }
+        else if (invoked)
         {
             _targetOffset = _hovered;
             _closing = true;
         }
-        else
-        {
-            _outsideFor = 0; // dismissed: stay open if the pointer is still on the wheel
-        }
     }
 
-    DragDropEffects DropEffectAt(DragEventArgs e, out LaunchItem? item, out string[] files)
-    {
-        item = null;
-        files = e.Data.GetData(DataFormats.FileDrop) as string[] ?? [];
-        if (_closing || _hovered < 0 || files.Length == 0) return DragDropEffects.None;
-        item = _visuals[_hovered].Item;
-        return item == null ? DragDropEffects.None : DropTargets.EffectFor(item, files, e.KeyStates, e.AllowedEffects);
-    }
+    // ---- Files dragged in from outside ----
 
     void OnDragOver(object sender, DragEventArgs e)
     {
         _dragging = true;
-        _dragEffect = DropEffectAt(e, out _, out _);
-        e.Effects = _dragEffect;
+        _dragFiles = e.Data.GetData(DataFormats.FileDrop) as string[] ?? [];
+        _dragKeys = e.KeyStates;
+        _dragAllowed = e.AllowedEffects;
+        e.Effects = CurrentDropEffect();
         e.Handled = true;
+    }
+
+    DragDropEffects CurrentDropEffect()
+    {
+        if (_closing || _dragFiles.Length == 0) return DragDropEffects.None;
+        if (_dropInto >= 0 && _visuals[_dropInto].Item is { } target)
+            return DropTargets.EffectFor(target, _dragFiles, _dragKeys, _dragAllowed);
+        if (_gap >= 0 && NewPaths().Count > 0)
+            return _dragAllowed.HasFlag(DragDropEffects.Link) ? DragDropEffects.Link : _dragAllowed & DragDropEffects.Copy;
+        return DragDropEffects.None;
+    }
+
+    /// <summary>Dragged paths that aren't already on this ring.</summary>
+    List<string> NewPaths()
+    {
+        var existing = CurrentRing.Items.Select(i => i.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return _dragFiles.Where(f => !existing.Contains(f) && (System.IO.File.Exists(f) || System.IO.Directory.Exists(f))).ToList();
+    }
+
+    void EndExternalDrag()
+    {
+        _dragging = false;
+        _gap = _dropInto = -1;
     }
 
     void OnDrop(object sender, DragEventArgs e)
     {
-        _dragging = false;
-        var effect = DropEffectAt(e, out var item, out var files);
-        // We do moves ourselves, so report "none" back: a source told "move" would delete the originals itself.
-        e.Effects = effect == DragDropEffects.Move ? DragDropEffects.None : effect;
+        _dragFiles = e.Data.GetData(DataFormats.FileDrop) as string[] ?? [];
+        _dragKeys = e.KeyStates;
+        var effect = CurrentDropEffect();
+        var into = _dropInto >= 0 ? _visuals[_dropInto].Item : null;
+        var gap = _gap;
+        var paths = NewPaths();
+        EndExternalDrag();
         e.Handled = true;
-        if (item == null || effect == DragDropEffects.None) return;
 
-        _targetOffset = _hovered;
-        _closing = true;
-        FilesDropped?.Invoke(item, files, effect);
+        if (into != null && effect != DragDropEffects.None)
+        {
+            // We do moves ourselves, so report "none" back: a source told "move" would delete the originals itself.
+            e.Effects = effect == DragDropEffects.Move ? DragDropEffects.None : effect;
+            _targetOffset = _visuals.FindIndex(v => v.Item == into);
+            _closing = true;
+            FilesDropped?.Invoke(into, _dragFiles, effect);
+            return;
+        }
+
+        if (gap >= 0 && paths.Count > 0)
+        {
+            // Added in place; the wheel stays open showing them.
+            e.Effects = effect;
+            var items = CurrentRing.Items;
+            gap = Math.Clamp(gap, 0, items.Count);
+            items.InsertRange(gap, paths.Select(p => new LaunchItem { Path = p }));
+            RebuildItems(keepOffset: true);
+            _targetOffset = gap;
+            RingEdited?.Invoke();
+            return;
+        }
+
+        e.Effects = DragDropEffects.None;
     }
 
     /// <summary>
-    /// Debug aid (<c>EdgeDock.exe --snapshot out.png [hoverIndex]</c>): renders the fully-open wheel
-    /// over a plain background without touching the screen. A negative index -N hovers ring dot N-1.
+    /// Debug aid (<c>HaloDock.exe --snapshot out.png [hoverIndex]</c>): renders the fully-open wheel
+    /// over a plain background without touching the screen. A negative index -N hovers ring dot N-2;
+    /// 100+N shows item N picked up and held over the gap after it.
     /// </summary>
     public BitmapSource RenderSnapshot(int width, int height, int hoverIndex)
     {
-        _palette = Theme.IsDark ? DarkPalette : LightPalette;
+        ApplyPalette();
         _ring = Math.Clamp(_settings.ActiveRing, 0, _settings.Rings.Count - 1);
         _ringCenters[_ring] = (CurrentRing.Items.Count - 1) / 2;
         RebuildItems();
@@ -693,12 +987,19 @@ public sealed class RadialMenuWindow : Window
         _itemsIn = 1;
         var cy = height / 2.0;
 
-        // Aim the pointer at the requested item or dot, then let the hover animation settle.
+        // Aim the pointer at the requested item or dot, then let the animations settle.
         Layout(0, new Point(-1000, -1000), height, cy, true);
         var cursor = new Point(-1000, -1000);
-        if (hoverIndex >= 0 && hoverIndex < _visuals.Count) cursor = new Point(_visuals[hoverIndex].X, _visuals[hoverIndex].Y);
+        if (hoverIndex >= 100 && hoverIndex - 100 < _visuals.Count - 1)
+        {
+            var held = hoverIndex - 100;
+            Lift(held);
+            var a = (_visuals[held + 1].Slot + 0.5 - _offset) * AngleStepDeg * Math.PI / 180;
+            cursor = new Point(_settings.Radius * Math.Cos(a) + 10, cy + _settings.Radius * Math.Sin(a));
+        }
+        else if (hoverIndex >= 0 && hoverIndex < _visuals.Count) cursor = new Point(_visuals[hoverIndex].X, _visuals[hoverIndex].Y);
         else if (hoverIndex < -1 && -hoverIndex - 2 < _dots.Count) cursor = new Point(_dots[-hoverIndex - 2].X, _dots[-hoverIndex - 2].Y);
-        for (var i = 0; i < 30; i++) Layout(1 / 60.0, cursor, height, cy, true);
+        for (var i = 0; i < 40; i++) Layout(1 / 60.0, cursor, height, cy, true);
 
         var root = new Grid
         {
@@ -736,19 +1037,23 @@ public sealed class RadialMenuWindow : Window
     }
 
     sealed class ItemVisual(
-        LaunchItem? item, Grid root, Border plate, ScaleTransform scaleTransform,
+        LaunchItem? item, Grid root, Border plate, ScaleTransform scale, RotateTransform rotate,
         Border label, TextBlock labelText, ScaleTransform labelScale, bool exists, bool alwaysPlate)
     {
         public LaunchItem? Item { get; } = item;
         public Grid Root { get; } = root;
         public Border Plate { get; } = plate;
-        public ScaleTransform ScaleTransform { get; } = scaleTransform;
+        public ScaleTransform Scale { get; } = scale;
+        public RotateTransform Rotate { get; } = rotate;
         public Border Label { get; } = label;
         public TextBlock LabelText { get; } = labelText;
         public ScaleTransform LabelScale { get; } = labelScale;
         public bool Exists { get; } = exists;
         public bool AlwaysPlate { get; } = alwaysPlate;
+        public bool InOrder { get; set; }
         public bool Visible { get; set; }
+        public double Slot { get; set; }
+        public double TargetSlot { get; set; }
         public double X { get; set; }
         public double Y { get; set; }
         public double Falloff { get; set; }

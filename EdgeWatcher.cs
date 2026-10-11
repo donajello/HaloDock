@@ -7,7 +7,7 @@ using System.Windows.Threading;
 using Microsoft.Win32;
 using Drawing = System.Drawing;
 
-namespace EdgeDock;
+namespace HaloDock;
 
 /// <summary>Polls the pointer and opens the menu when it rests against an enabled monitor's left edge.</summary>
 public sealed class EdgeWatcher

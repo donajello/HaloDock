@@ -8,7 +8,7 @@ using Microsoft.Win32;
 using Drawing = System.Drawing;
 using Forms = System.Windows.Forms;
 
-namespace EdgeDock;
+namespace HaloDock;
 
 public partial class App : Application
 {
@@ -38,15 +38,16 @@ public partial class App : Application
             return;
         }
 
-        _singleInstance = new Mutex(true, @"Local\EdgeDock.SingleInstance", out var first);
+        _singleInstance = new Mutex(true, @"Local\HaloDock.SingleInstance", out var first);
         if (!first)
         {
-            MessageBox.Show("EdgeDock is already running — look for its icon in the system tray.", "EdgeDock");
+            MessageBox.Show("HaloDock is already running — look for its icon in the system tray.", "HaloDock");
             Shutdown();
             return;
         }
 
         _settings = AppSettings.Load();
+        ApplyStartWithWindows(_settings.StartWithWindows); // also points the entry at wherever this exe now lives
         Theme.Initialize();
 
         _menu = new RadialMenuWindow(_settings);
@@ -55,8 +56,9 @@ public partial class App : Application
         _menu.ActiveRingChanged += ring =>
         {
             _settings.ActiveRing = ring;
-            try { _settings.Save(); } catch { /* remembered for this session anyway */ }
+            SaveQuietly();
         };
+        _menu.RingEdited += SaveQuietly;
         _menu.FilesDropped += (item, files, effect) =>
         {
             try { DropTargets.Perform(item, files, effect); }
@@ -71,7 +73,7 @@ public partial class App : Application
         if (_settings.Rings.All(r => r.Items.Count == 0))
         {
             OpenSettings();
-            _tray.ShowBalloonTip(4000, "EdgeDock is running",
+            _tray.ShowBalloonTip(4000, "HaloDock is running",
                 "Add some files or folders, then rest your pointer against the left edge of the screen.", Forms.ToolTipIcon.Info);
         }
     }
@@ -150,7 +152,7 @@ public partial class App : Application
         var tray = new Forms.NotifyIcon
         {
             Icon = CreateTrayIcon(),
-            Text = "EdgeDock",
+            Text = "HaloDock",
             Visible = true,
         };
         tray.MouseClick += (_, args) =>
@@ -205,6 +207,12 @@ public partial class App : Application
         _settingsWindow.Activate();
     }
 
+    void SaveQuietly()
+    {
+        try { _settings.Save(); }
+        catch { /* still applies for this session */ }
+    }
+
     void ApplySettings(AppSettings settings)
     {
         _settings = settings;
@@ -214,7 +222,7 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            MessageBox.Show("Couldn't save settings:\n" + ex.Message, "EdgeDock", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show("Couldn't save settings:\n" + ex.Message, "HaloDock", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         ShellIcons.Clear();
         _menu!.Settings = _settings;
@@ -227,8 +235,9 @@ public partial class App : Application
         {
             using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
             if (key == null) return;
-            if (enabled) key.SetValue("EdgeDock", $"\"{Environment.ProcessPath}\"");
-            else if (key.GetValue("EdgeDock") != null) key.DeleteValue("EdgeDock");
+            if (key.GetValue("EdgeDock") != null) key.DeleteValue("EdgeDock"); // entry from before the rename
+            if (enabled) key.SetValue("HaloDock", $"\"{Environment.ProcessPath}\"");
+            else if (key.GetValue("HaloDock") != null) key.DeleteValue("HaloDock");
         }
         catch
         {

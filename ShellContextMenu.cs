@@ -2,7 +2,7 @@ using System;
 using System.Runtime.InteropServices;
 using System.Windows.Interop;
 
-namespace EdgeDock;
+namespace HaloDock;
 
 /// <summary>Shows Explorer's own right-click menu for a file or folder.</summary>
 public static class ShellContextMenu
@@ -21,8 +21,13 @@ public static class ShellContextMenu
     static IContextMenu2? _menu2;
     static IContextMenu3? _menu3;
 
-    /// <summary>Shows the menu at a screen point (physical pixels). Returns true if a command was chosen.</summary>
-    public static bool Show(string path, int x, int y)
+    const uint MF_STRING = 0x0, MF_CHECKED = 0x8, MF_SEPARATOR = 0x800;
+
+    /// <summary>
+    /// Shows the menu at a screen point (physical pixels), with <paramref name="extras"/> of our own appended
+    /// at the bottom. Returns true if a command was chosen.
+    /// </summary>
+    public static bool Show(string path, int x, int y, params (string Text, Action OnClick)[] extras)
     {
         var owner = Owner();
         object? itemObj = null;
@@ -42,12 +47,20 @@ public static class ShellContextMenu
             hmenu = CreatePopupMenu();
             var shift = (NativeMethods.GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
             menu.QueryContextMenu(hmenu, 0, CmdFirst, CmdLast, CMF_NORMAL | (shift ? CMF_EXTENDEDVERBS : 0));
+            if (extras.Length > 0) AppendMenu(hmenu, MF_SEPARATOR, UIntPtr.Zero, null);
+            for (var i = 0; i < extras.Length; i++)
+                AppendMenu(hmenu, MF_STRING, (UIntPtr)(CmdLast + 1 + (uint)i), extras[i].Text);
 
             // A popup menu only dismisses properly when its owner is the foreground window.
             SetForegroundWindow(owner);
             var cmd = TrackPopupMenuEx(hmenu, TPM_RETURNCMD | TPM_RIGHTBUTTON, x, y, owner, IntPtr.Zero);
             PostMessage(owner, WM_NULL, IntPtr.Zero, IntPtr.Zero);
             if (cmd == 0) return false;
+            if (cmd > CmdLast)
+            {
+                extras[cmd - CmdLast - 1].OnClick();
+                return true;
+            }
 
             var mask = CMIC_MASK_UNICODE | CMIC_MASK_PTINVOKE;
             if ((NativeMethods.GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0) mask |= CMIC_MASK_SHIFT_DOWN;
@@ -85,7 +98,6 @@ public static class ShellContextMenu
     /// <summary>A plain Win32 popup menu at the pointer (used for the tray icon, so it matches the system theme).</summary>
     public static void ShowSimpleMenu(params (string? Text, bool Checked, Action? OnClick)[] entries)
     {
-        const uint MF_STRING = 0x0, MF_CHECKED = 0x8, MF_SEPARATOR = 0x800;
         var owner = Owner();
         var hmenu = CreatePopupMenu();
         try
@@ -118,7 +130,7 @@ public static class ShellContextMenu
     {
         if (_owner == null)
         {
-            _owner = new HwndSource(new HwndSourceParameters("EdgeDockMenuOwner")
+            _owner = new HwndSource(new HwndSourceParameters("HaloDockMenuOwner")
             {
                 WindowStyle = unchecked((int)0x80000000), // WS_POPUP, never shown
                 ExtendedWindowStyle = (int)NativeMethods.WS_EX_TOOLWINDOW,

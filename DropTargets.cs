@@ -5,7 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Windows;
 
-namespace EdgeDock;
+namespace HaloDock;
 
 /// <summary>What happens when files are dropped on a menu item: folders receive them, apps open them.</summary>
 public static class DropTargets

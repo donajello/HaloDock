@@ -4,7 +4,7 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace EdgeDock;
+namespace HaloDock;
 
 public enum MonitorMode
 {
@@ -86,6 +86,10 @@ public sealed class AppSettings
     };
 
     public static string FilePath => System.IO.Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "HaloDock", "settings.json");
+
+    /// <summary>Where settings lived before the app was renamed from EdgeDock.</summary>
+    static string OldFilePath => System.IO.Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "EdgeDock", "settings.json");
 
     public static AppSettings Load()
@@ -93,6 +97,11 @@ public sealed class AppSettings
         AppSettings? settings = null;
         try
         {
+            if (!File.Exists(FilePath) && File.Exists(OldFilePath))
+            {
+                Directory.CreateDirectory(System.IO.Path.GetDirectoryName(FilePath)!);
+                File.Copy(OldFilePath, FilePath);
+            }
             if (File.Exists(FilePath))
                 settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(FilePath), JsonOptions);
         }

@@ -7,7 +7,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
-namespace EdgeDock;
+namespace HaloDock;
 
 /// <summary>Loads the same icons/thumbnails Explorer shows, with proper alpha.</summary>
 public static class ShellIcons

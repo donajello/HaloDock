@@ -10,7 +10,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using Microsoft.Win32;
 
-namespace EdgeDock;
+namespace HaloDock;
 
 public partial class SettingsWindow : Window
 {
@@ -85,11 +85,11 @@ public partial class SettingsWindow : Window
         if (RingPicker.SelectedItem is not RingRow ring) return;
         if (_rings.Count == 1)
         {
-            MessageBox.Show(this, "You need at least one ring.", "EdgeDock");
+            MessageBox.Show(this, "You need at least one ring.", "HaloDock");
             return;
         }
         if (ring.Items.Count > 0 &&
-            MessageBox.Show(this, $"Delete \"{ring.Name}\" and its {ring.Items.Count} item(s)?", "EdgeDock",
+            MessageBox.Show(this, $"Delete \"{ring.Name}\" and its {ring.Items.Count} item(s)?", "HaloDock",
                 MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
             return;
 
@@ -135,13 +135,13 @@ public partial class SettingsWindow : Window
 
     void AddFiles_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFileDialog { Multiselect = true, DereferenceLinks = false, Title = "Add files to EdgeDock" };
+        var dialog = new OpenFileDialog { Multiselect = true, DereferenceLinks = false, Title = "Add files to HaloDock" };
         if (dialog.ShowDialog(this) == true) AddPaths(dialog.FileNames);
     }
 
     void AddFolder_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFolderDialog { Multiselect = true, Title = "Add folders to EdgeDock" };
+        var dialog = new OpenFolderDialog { Multiselect = true, Title = "Add folders to HaloDock" };
         if (dialog.ShowDialog(this) == true) AddPaths(dialog.FolderNames);
     }
 
@@ -202,7 +202,7 @@ public partial class SettingsWindow : Window
 
         if (_settings.MonitorMode == MonitorMode.Selected && _settings.SelectedMonitors.Count == 0)
         {
-            MessageBox.Show(this, "Pick at least one monitor, or choose \"All monitors\".", "EdgeDock");
+            MessageBox.Show(this, "Pick at least one monitor, or choose \"All monitors\".", "HaloDock");
             return;
         }
 
