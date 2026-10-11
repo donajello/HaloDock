@@ -10,12 +10,11 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <RootNamespace>HaloDock</RootNamespace>
     <AssemblyName>HaloDock</AssemblyName>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
     <Product>HaloDock</Product>
     <Description>Radial launcher that pops out from the edge of your screen.</Description>
     <!-- WinForms is only used for the tray icon; DPI awareness belongs in the manifest for WPF. -->
-    <!-- WPF0001: Fluent ThemeMode (follows Windows light/dark) is marked experimental in .NET 9. -->
-    <NoWarn>$(NoWarn);WFO0003;WPF0001</NoWarn>
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
   </PropertyGroup>
 
 </Project>

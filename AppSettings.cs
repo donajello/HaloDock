@@ -1,10 +1,19 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace HaloDock;
+
+/// <summary>Screen edges the wheel can open from. The bottom is left to the taskbar.</summary>
+public enum ScreenEdge
+{
+    Left,
+    Right,
+    Top,
+}
 
 public enum MonitorMode
 {
@@ -112,6 +121,9 @@ public sealed class AppSettings
     [JsonIgnore]
     public RingPreset CurrentRing => Rings[Math.Clamp(ActiveRing, 0, Rings.Count - 1)];
 
+    /// <summary>Edges that open the wheel when the pointer rests against them.</summary>
+    public List<ScreenEdge> Edges { get; set; } = [ScreenEdge.Left];
+
     public MonitorMode MonitorMode { get; set; } = MonitorMode.All;
 
     /// <summary>Device names (e.g. \\.\DISPLAY2) used when MonitorMode is Selected.</summary>
@@ -128,6 +140,10 @@ public sealed class AppSettings
     public RemoveSymbol RemoveSymbol { get; set; } = RemoveSymbol.Unpin;
     public bool IgnoreFullscreen { get; set; } = true;
     public bool StartWithWindows { get; set; }
+
+    /// <summary>Opt-in: look for a newer release on GitHub once a day.</summary>
+    public bool CheckForUpdates { get; set; }
+    public DateTime? LastUpdateCheck { get; set; }
 
     static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -169,6 +185,7 @@ public sealed class AppSettings
         else if (Items is { Count: > 0 }) Rings[0].Items.AddRange(Items);
         Items = null;
         ActiveRing = Math.Clamp(ActiveRing, 0, Rings.Count - 1);
+        Edges = (Edges ?? [ScreenEdge.Left]).Distinct().ToList();
         return this;
     }
 

@@ -9,7 +9,7 @@ using Drawing = System.Drawing;
 
 namespace HaloDock;
 
-/// <summary>Polls the pointer and opens the menu when it rests against an enabled monitor's left edge.</summary>
+/// <summary>Polls the pointer and opens the menu when it rests against an enabled edge of an enabled monitor.</summary>
 public sealed class EdgeWatcher
 {
     readonly RadialMenuWindow _menu;
@@ -51,8 +51,8 @@ public sealed class EdgeWatcher
 
         var s = _settings();
         var monitor = _monitors.FirstOrDefault(m => m.Bounds.Contains(p.X, p.Y));
-        var atEdge = monitor != null && p.X < monitor.Bounds.Left + Math.Max(1, s.EdgeWidthPx);
-        if (!atEdge)
+        var edge = monitor == null ? null : EdgeUnder(monitor, p, s);
+        if (edge == null)
         {
             _armed = true;
             _dwellStart = -1;
@@ -68,7 +68,7 @@ public sealed class EdgeWatcher
         }
 
         if (Paused || !_armed || !IsEnabled(monitor!, s)
-            || (s.OuterEdgesOnly && HasNeighborToLeft(monitor!, p.Y))
+            || (s.OuterEdgesOnly && HasNeighborBeyond(monitor!, edge.Value, p))
             || (s.IgnoreFullscreen && FullscreenAppOn(monitor!)))
         {
             _dwellStart = -1;
@@ -80,8 +80,19 @@ public sealed class EdgeWatcher
         {
             _dwellStart = -1;
             _armed = false;
-            _menu.Open(monitor!, new Drawing.Point(p.X, p.Y));
+            _menu.Open(monitor!, new Drawing.Point(p.X, p.Y), edge.Value);
         }
+    }
+
+    /// <summary>The enabled edge the pointer is resting against, if any. Sides win over the top in a corner.</summary>
+    static ScreenEdge? EdgeUnder(MonitorInfo monitor, NativeMethods.POINT p, AppSettings s)
+    {
+        var b = monitor.Bounds;
+        var w = Math.Max(1, s.EdgeWidthPx);
+        if (s.Edges.Contains(ScreenEdge.Left) && p.X < b.Left + w) return ScreenEdge.Left;
+        if (s.Edges.Contains(ScreenEdge.Right) && p.X >= b.Right - w) return ScreenEdge.Right;
+        if (s.Edges.Contains(ScreenEdge.Top) && p.Y < b.Top + w) return ScreenEdge.Top;
+        return null;
     }
 
     static bool IsEnabled(MonitorInfo monitor, AppSettings s) => s.MonitorMode switch
@@ -91,8 +102,18 @@ public sealed class EdgeWatcher
         _ => true,
     };
 
-    bool HasNeighborToLeft(MonitorInfo monitor, int y) =>
-        _monitors.Any(o => o != monitor && o.Bounds.Contains(monitor.Bounds.Left - 1, y));
+    /// <summary>True if another monitor continues past this edge, i.e. it's a seam rather than a wall.</summary>
+    bool HasNeighborBeyond(MonitorInfo monitor, ScreenEdge edge, NativeMethods.POINT p)
+    {
+        var b = monitor.Bounds;
+        var (x, y) = edge switch
+        {
+            ScreenEdge.Right => (b.Right, p.Y),
+            ScreenEdge.Top => (p.X, b.Top - 1),
+            _ => (b.Left - 1, p.Y),
+        };
+        return _monitors.Any(o => o != monitor && o.Bounds.Contains(x, y));
+    }
 
     static bool MouseButtonDown() =>
         (NativeMethods.GetAsyncKeyState(NativeMethods.VK_LBUTTON) & 0x8000) != 0

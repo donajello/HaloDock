@@ -1,183 +1,698 @@
 <Window x:Class="HaloDock.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="HaloDock Settings" Width="720" Height="600" MinWidth="560" MinHeight="460"
-        WindowStartupLocation="CenterScreen" ThemeMode="System">
+        Title="HaloDock Settings" Width="920" Height="640" MinWidth="760" MinHeight="520"
+        WindowStartupLocation="CenterScreen" FontFamily="Segoe UI" FontSize="13"
+        Background="{DynamicResource WinBg}" Foreground="{DynamicResource TextMain}"
+        UseLayoutRounding="True" SnapsToDevicePixels="True" TextOptions.TextFormattingMode="Display">
+
   <Window.Resources>
-    <Style x:Key="Hint" TargetType="TextBlock">
-      <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
-      <Setter Property="TextWrapping" Value="Wrap"/>
-      <Setter Property="Margin" Value="0,2,0,12"/>
-    </Style>
-    <Style x:Key="Heading" TargetType="TextBlock">
+    <FontFamily x:Key="Icons">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+
+    <!-- Text -->
+    <Style x:Key="PageTitle" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="22"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
-      <Setter Property="Margin" Value="0,10,0,4"/>
+      <Setter Property="Margin" Value="0,0,0,4"/>
     </Style>
-    <Style x:Key="Value" TargetType="TextBlock">
-      <Setter Property="Width" Value="70"/>
-      <Setter Property="TextAlignment" Value="Right"/>
-      <Setter Property="DockPanel.Dock" Value="Right"/>
+    <Style x:Key="SectionTitle" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="14"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Margin" Value="0,0,0,6"/>
+    </Style>
+    <Style x:Key="Dim" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource TextDim}"/>
+      <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+
+    <!-- Cards -->
+    <Style x:Key="Card" TargetType="Border">
+      <Setter Property="Background" Value="{DynamicResource CardBg}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorder}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="8"/>
+      <Setter Property="Padding" Value="16,14"/>
+      <Setter Property="Margin" Value="0,0,0,12"/>
+    </Style>
+
+    <!-- Buttons -->
+    <Style TargetType="Button">
+      <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+      <Setter Property="Background" Value="{DynamicResource CardBg}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorder}"/>
+      <Setter Property="Padding" Value="14,6"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="1" CornerRadius="6" Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Hover}"/>
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Pressed}"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="Bd" Property="Opacity" Value="0.45"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+      <Setter Property="Foreground" Value="White"/>
+      <Setter Property="Background" Value="{DynamicResource Accent}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Accent}"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderThickness="0"
+                    CornerRadius="6" Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentHover}"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="Bd" Property="Opacity" Value="0.45"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- Borderless icon button (used for row actions) -->
+    <Style x:Key="IconButton" TargetType="Button">
+      <Setter Property="Foreground" Value="{DynamicResource TextDim}"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Width" Value="30"/>
+      <Setter Property="Height" Value="30"/>
+      <Setter Property="FontFamily" Value="{StaticResource Icons}"/>
+      <Setter Property="FontSize" Value="14"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Bd" Background="Transparent" CornerRadius="6">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Hover}"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- Text boxes -->
+    <Style TargetType="TextBox">
+      <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+      <Setter Property="Background" Value="{DynamicResource InputBg}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorder}"/>
+      <Setter Property="CaretBrush" Value="{DynamicResource TextMain}"/>
+      <Setter Property="SelectionBrush" Value="{DynamicResource Accent}"/>
+      <Setter Property="Padding" Value="8,5"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="TextBox">
+            <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="1" CornerRadius="6">
+              <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" Focusable="False"
+                            VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Hidden"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- Text box that looks like plain text until hovered or focused (item names) -->
+    <Style x:Key="InlineEdit" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderBrush" Value="Transparent"/>
+      <Setter Property="Padding" Value="4,2"/>
+      <Style.Triggers>
+        <Trigger Property="IsMouseOver" Value="True">
+          <Setter Property="BorderBrush" Value="{DynamicResource CardBorder}"/>
+        </Trigger>
+        <Trigger Property="IsKeyboardFocused" Value="True">
+          <Setter Property="Background" Value="{DynamicResource InputBg}"/>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+
+    <!-- Toggle switch -->
+    <Style x:Key="Toggle" TargetType="CheckBox">
+      <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="CheckBox">
+            <DockPanel Background="Transparent" LastChildFill="True">
+              <Border x:Name="Track" DockPanel.Dock="Right" Width="40" Height="20" CornerRadius="10"
+                      Background="{DynamicResource TrackBg}" VerticalAlignment="Center" Margin="16,0,0,0">
+                <Ellipse x:Name="Knob" Width="14" Height="14" Fill="White" HorizontalAlignment="Left" Margin="3,0,0,0"/>
+              </Border>
+              <ContentPresenter VerticalAlignment="Center"/>
+            </DockPanel>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="Track" Property="Background" Value="{DynamicResource Accent}"/>
+                <Setter TargetName="Knob" Property="HorizontalAlignment" Value="Right"/>
+                <Setter TargetName="Knob" Property="Margin" Value="0,0,3,0"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- Plain check box (monitor list) -->
+    <Style TargetType="CheckBox">
+      <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="CheckBox">
+            <StackPanel Orientation="Horizontal" Background="Transparent">
+              <Border x:Name="Box" Width="18" Height="18" CornerRadius="4" BorderThickness="1"
+                      BorderBrush="{DynamicResource TextDim}" Background="Transparent" VerticalAlignment="Center">
+                <TextBlock x:Name="Tick" Text="&#xE73E;" FontFamily="{StaticResource Icons}" FontSize="11"
+                           Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Hidden"/>
+              </Border>
+              <ContentPresenter Margin="10,0,0,0" VerticalAlignment="Center"/>
+            </StackPanel>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="Box" Property="Background" Value="{DynamicResource Accent}"/>
+                <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                <Setter TargetName="Tick" Property="Visibility" Value="Visible"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.45"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- Sidebar navigation -->
+    <Style x:Key="NavItem" TargetType="RadioButton">
+      <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Margin" Value="0,0,0,2"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="RadioButton">
+            <Grid>
+              <Border x:Name="Bd" CornerRadius="6" Background="Transparent" Padding="12,9">
+                <ContentPresenter/>
+              </Border>
+              <Border x:Name="Bar" Width="3" Height="16" CornerRadius="2" HorizontalAlignment="Left"
+                      Background="{DynamicResource Accent}" Visibility="Hidden"/>
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Hover}"/>
+              </Trigger>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Pressed}"/>
+                <Setter TargetName="Bar" Property="Visibility" Value="Visible"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- Segmented choice (pill buttons) -->
+    <Style x:Key="Segment" TargetType="RadioButton">
+      <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Margin" Value="0,0,6,6"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="RadioButton">
+            <Border x:Name="Bd" CornerRadius="6" BorderThickness="1" Padding="14,7"
+                    Background="{DynamicResource CardBg}" BorderBrush="{DynamicResource CardBorder}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Hover}"/>
+              </Trigger>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentSoft}"/>
+                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- Monitor edge toggle (a bar along one side of the drawn screen) -->
+    <Style x:Key="EdgeToggle" TargetType="ToggleButton">
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ToggleButton">
+            <Border x:Name="Bd" CornerRadius="4" Background="{DynamicResource TrackBg}"/>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Opacity" Value="0.8"/>
+              </Trigger>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Accent}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- Slider -->
+    <Style x:Key="SliderEdge" TargetType="RepeatButton">
+      <Setter Property="Focusable" Value="False"/>
+      <Setter Property="IsTabStop" Value="False"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="RepeatButton">
+            <Border Background="Transparent">
+              <Border Height="4" CornerRadius="2" Background="{TemplateBinding Background}" VerticalAlignment="Center"/>
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style TargetType="Slider">
+      <Setter Property="IsMoveToPointEnabled" Value="True"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Slider">
+            <Track x:Name="PART_Track" Height="22">
+              <Track.DecreaseRepeatButton>
+                <RepeatButton Style="{StaticResource SliderEdge}" Background="{DynamicResource Accent}" Command="Slider.DecreaseLarge"/>
+              </Track.DecreaseRepeatButton>
+              <Track.IncreaseRepeatButton>
+                <RepeatButton Style="{StaticResource SliderEdge}" Background="{DynamicResource TrackBg}" Command="Slider.IncreaseLarge"/>
+              </Track.IncreaseRepeatButton>
+              <Track.Thumb>
+                <Thumb Cursor="Hand">
+                  <Thumb.Template>
+                    <ControlTemplate TargetType="Thumb">
+                      <Grid Width="18" Height="18">
+                        <Ellipse Fill="{DynamicResource CardBg}" Stroke="{DynamicResource CardBorder}" StrokeThickness="1"/>
+                        <Ellipse Width="10" Height="10" Fill="{DynamicResource Accent}"/>
+                      </Grid>
+                    </ControlTemplate>
+                  </Thumb.Template>
+                </Thumb>
+              </Track.Thumb>
+            </Track>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- Slim scroll bars -->
+    <Style TargetType="ScrollBar">
+      <Setter Property="Width" Value="10"/>
+      <Setter Property="MinWidth" Value="10"/>
+      <Style.Triggers>
+        <Trigger Property="Orientation" Value="Vertical">
+          <Setter Property="Template">
+            <Setter.Value>
+              <ControlTemplate TargetType="ScrollBar">
+                <Track x:Name="PART_Track" IsDirectionReversed="True" Margin="2,2">
+                  <Track.Thumb>
+                    <Thumb>
+                      <Thumb.Template>
+                        <ControlTemplate TargetType="Thumb">
+                          <Border CornerRadius="3" Background="{DynamicResource TrackBg}"/>
+                        </ControlTemplate>
+                      </Thumb.Template>
+                    </Thumb>
+                  </Track.Thumb>
+                </Track>
+              </ControlTemplate>
+            </Setter.Value>
+          </Setter>
+        </Trigger>
+      </Style.Triggers>
+    </Style>
+
+    <!-- Lists without the default selection chrome -->
+    <Style x:Key="PlainList" TargetType="ListBox">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="0"/>
+      <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+      <Setter Property="VirtualizingPanel.IsVirtualizing" Value="True"/>
+      <Setter Property="VirtualizingPanel.ScrollUnit" Value="Pixel"/>
+    </Style>
+    <Style x:Key="PlainRow" TargetType="ListBoxItem">
+      <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+      <Setter Property="Margin" Value="0,0,0,2"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ListBoxItem">
+            <Border x:Name="Bd" CornerRadius="6" Background="Transparent" Padding="8,6">
+              <ContentPresenter/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Hover}"/>
+              </Trigger>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Pressed}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
     </Style>
   </Window.Resources>
 
-  <DockPanel Margin="16">
-    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-      <Button Content="Save" IsDefault="True" Click="Save_Click" Margin="0,0,8,0" MinWidth="120"
-              Style="{DynamicResource AccentButtonStyle}"/>
-      <Button Content="Cancel" IsCancel="True" MinWidth="120"/>
-    </StackPanel>
+  <Grid>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="210"/>
+      <ColumnDefinition Width="*"/>
+    </Grid.ColumnDefinitions>
 
-    <TabControl Padding="12">
-      <TabItem Header="Items">
-        <DockPanel>
-          <StackPanel DockPanel.Dock="Top" Margin="0,0,0,12">
-            <DockPanel>
-              <Button DockPanel.Dock="Right" Content="Delete ring" Click="DeleteRing_Click" Margin="8,0,0,0" MinWidth="110"/>
-              <Button DockPanel.Dock="Right" Content="New ring" Click="NewRing_Click" Margin="8,0,0,0" MinWidth="110"/>
-              <ComboBox x:Name="RingPicker" SelectionChanged="RingPicker_SelectionChanged">
-                <ComboBox.ItemTemplate>
-                  <DataTemplate>
-                    <StackPanel Orientation="Horizontal">
-                      <Ellipse Width="12" Height="12" Fill="{Binding Brush}" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                      <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
-                    </StackPanel>
-                  </DataTemplate>
-                </ComboBox.ItemTemplate>
-              </ComboBox>
-            </DockPanel>
-            <DockPanel Margin="0,10,0,0">
-              <TextBlock Text="Name" VerticalAlignment="Center" Margin="0,0,10,0"/>
-              <TextBox x:Name="RingName" Width="200" VerticalAlignment="Center"
-                       Text="{Binding SelectedItem.Name, ElementName=RingPicker, UpdateSourceTrigger=PropertyChanged}"/>
-              <TextBlock Text="Colour" VerticalAlignment="Center" Margin="20,0,10,0"/>
-              <ItemsControl x:Name="Swatches" VerticalAlignment="Center">
-                <ItemsControl.ItemsPanel>
-                  <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate>
-                    <Grid Width="26" Height="26" Margin="0,0,4,0" Cursor="Hand" Background="Transparent"
-                          MouseLeftButtonUp="Swatch_Click" ToolTip="{Binding Color}">
-                      <Ellipse Width="24" Height="24" Stroke="{DynamicResource TextFillColorPrimaryBrush}"
-                               StrokeThickness="2" Visibility="{Binding SelectedVisibility}"/>
-                      <Ellipse Width="16" Height="16" Fill="{Binding Brush}"/>
-                    </Grid>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-            </DockPanel>
-            <TextBlock Style="{StaticResource Hint}" Margin="0,10,0,0"
-                       Text="Each ring is its own set of items. In the menu, click a coloured dot on the inner ring to switch, or scroll just inside the icons. Drag things in from Explorer, and click an item's name to rename it. You can also hold an icon in the menu to move it, or drag files into the menu to add them."/>
-          </StackPanel>
-          <StackPanel DockPanel.Dock="Right" Margin="12,0,0,0" Width="130">
-            <Button Content="Add files…" Click="AddFiles_Click" HorizontalAlignment="Stretch" Margin="0,0,0,8"/>
-            <Button Content="Add folder…" Click="AddFolder_Click" HorizontalAlignment="Stretch" Margin="0,0,0,8"/>
-            <Button Content="Remove" Click="Remove_Click" HorizontalAlignment="Stretch" Margin="0,0,0,8"/>
-            <Button Content="Move up" Click="MoveUp_Click" HorizontalAlignment="Stretch" Margin="0,0,0,8"/>
-            <Button Content="Move down" Click="MoveDown_Click" HorizontalAlignment="Stretch" Margin="0,0,0,8"/>
-          </StackPanel>
-          <ListBox x:Name="ItemsList" AllowDrop="True" Drop="ItemsList_Drop" DragOver="ItemsList_DragOver"
-                   HorizontalContentAlignment="Stretch" SelectionMode="Extended"
-                   PreviewGotKeyboardFocus="ItemsList_PreviewGotKeyboardFocus">
-            <ListBox.ItemTemplate>
-              <DataTemplate>
-                <Grid Margin="2,4">
-                  <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="40"/>
-                    <ColumnDefinition Width="*"/>
-                  </Grid.ColumnDefinitions>
-                  <Image Source="{Binding Icon}" Width="32" Height="32" RenderOptions.BitmapScalingMode="HighQuality"/>
-                  <StackPanel Grid.Column="1" Margin="6,0,0,0">
-                    <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" BorderThickness="0"
-                             Background="Transparent" FontWeight="SemiBold" Padding="0"/>
-                    <TextBlock Text="{Binding Path}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="11" TextTrimming="CharacterEllipsis"/>
-                    <TextBlock Text="Not found" Foreground="{DynamicResource SystemFillColorCriticalBrush}" FontSize="11" Visibility="{Binding MissingVisibility}"/>
-                  </StackPanel>
-                </Grid>
-              </DataTemplate>
-            </ListBox.ItemTemplate>
-          </ListBox>
-        </DockPanel>
-      </TabItem>
+    <!-- Sidebar -->
+    <Border Background="{DynamicResource NavBg}" BorderBrush="{DynamicResource CardBorder}" BorderThickness="0,0,1,0">
+      <DockPanel Margin="12,18,12,14">
+        <StackPanel DockPanel.Dock="Top" Margin="8,0,0,18">
+          <TextBlock Text="HaloDock" FontSize="20" FontWeight="SemiBold"/>
+          <TextBlock x:Name="VersionText" Style="{StaticResource Dim}" FontSize="12" Margin="0,2,0,0"/>
+        </StackPanel>
+        <TextBlock DockPanel.Dock="Bottom" Margin="8,0,0,0" FontSize="12">
+          <Hyperlink x:Name="RepoLink" Click="RepoLink_Click" Foreground="{DynamicResource TextDim}">github.com/donajello/HaloDock</Hyperlink>
+        </TextBlock>
+        <StackPanel>
+          <RadioButton x:Name="NavRings" Style="{StaticResource NavItem}" GroupName="Nav" IsChecked="True" Checked="Nav_Checked">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="&#xE8FD;" FontFamily="{StaticResource Icons}" FontSize="15" Width="28" VerticalAlignment="Center"/>
+              <TextBlock Text="Rings"/>
+            </StackPanel>
+          </RadioButton>
+          <RadioButton x:Name="NavEdges" Style="{StaticResource NavItem}" GroupName="Nav" Checked="Nav_Checked">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="&#xE7F4;" FontFamily="{StaticResource Icons}" FontSize="15" Width="28" VerticalAlignment="Center"/>
+              <TextBlock Text="Screen edges"/>
+            </StackPanel>
+          </RadioButton>
+          <RadioButton x:Name="NavBehavior" Style="{StaticResource NavItem}" GroupName="Nav" Checked="Nav_Checked">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="&#xE713;" FontFamily="{StaticResource Icons}" FontSize="15" Width="28" VerticalAlignment="Center"/>
+              <TextBlock Text="Behavior"/>
+            </StackPanel>
+          </RadioButton>
+          <RadioButton x:Name="NavUpdates" Style="{StaticResource NavItem}" GroupName="Nav" Checked="Nav_Checked">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="&#xE895;" FontFamily="{StaticResource Icons}" FontSize="15" Width="28" VerticalAlignment="Center"/>
+              <TextBlock Text="Updates"/>
+            </StackPanel>
+          </RadioButton>
+        </StackPanel>
+      </DockPanel>
+    </Border>
 
-      <TabItem Header="Monitors">
-        <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <!-- Rings page -->
+    <Grid x:Name="PageRings" Grid.Column="1" Margin="24,20,24,20">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="190"/>
+        <ColumnDefinition Width="*"/>
+      </Grid.ColumnDefinitions>
+
+      <DockPanel Margin="0,0,18,0">
+        <TextBlock DockPanel.Dock="Top" Text="Rings" Style="{StaticResource PageTitle}"/>
+        <TextBlock DockPanel.Dock="Top" Text="Each ring is its own set of items." Style="{StaticResource Dim}" Margin="0,0,0,12"/>
+        <Button DockPanel.Dock="Bottom" Click="NewRing_Click" Margin="0,10,0,0" HorizontalAlignment="Stretch">
+          <StackPanel Orientation="Horizontal">
+            <TextBlock Text="&#xE710;" FontFamily="{StaticResource Icons}" FontSize="12" Margin="0,0,8,0" VerticalAlignment="Center"/>
+            <TextBlock Text="New ring"/>
+          </StackPanel>
+        </Button>
+        <ListBox x:Name="RingList" Style="{StaticResource PlainList}" ItemContainerStyle="{StaticResource PlainRow}"
+                 SelectionChanged="RingList_SelectionChanged">
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <DockPanel>
+                <TextBlock DockPanel.Dock="Right" Text="{Binding Items.Count}" Foreground="{DynamicResource TextDim}" FontSize="12" VerticalAlignment="Center"/>
+                <Ellipse Width="12" Height="12" Fill="{Binding Brush}" Margin="2,0,10,0" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+              </DockPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </DockPanel>
+
+      <DockPanel Grid.Column="1">
+        <!-- Ring header: name, colour, delete -->
+        <Border DockPanel.Dock="Top" Style="{StaticResource Card}">
           <StackPanel>
-            <TextBlock Style="{StaticResource Hint}"
-                       Text="Choose which displays open the menu when the pointer rests against their left edge."/>
-            <RadioButton x:Name="ModeAll" GroupName="Mode" Content="All monitors" Margin="0,4" Checked="Mode_Checked"/>
-            <RadioButton x:Name="ModePrimary" GroupName="Mode" Content="Primary monitor only" Margin="0,4" Checked="Mode_Checked"/>
-            <RadioButton x:Name="ModeSelected" GroupName="Mode" Content="Only these monitors:" Margin="0,4" Checked="Mode_Checked"/>
-            <ItemsControl x:Name="MonitorList" Margin="24,4,0,8">
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE74D;" ToolTip="Delete this ring"
+                      Click="DeleteRing_Click" Margin="8,0,0,0"/>
+              <TextBox x:Name="RingName" FontSize="15" TextChanged="RingName_TextChanged"/>
+            </DockPanel>
+            <ItemsControl x:Name="Swatches" Margin="0,12,0,0">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                  <CheckBox Content="{Binding Label}" IsChecked="{Binding IsChecked}" Margin="0,3"/>
+                  <Grid Width="28" Height="28" Margin="0,0,6,0" Cursor="Hand" Background="Transparent" MouseLeftButtonUp="Swatch_Click">
+                    <Ellipse Width="26" Height="26" Stroke="{DynamicResource TextMain}" StrokeThickness="2" Visibility="{Binding SelectedVisibility}"/>
+                    <Ellipse Width="18" Height="18" Fill="{Binding Brush}"/>
+                  </Grid>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
-
-            <CheckBox x:Name="OuterOnly" Content="Only use outer edges" Margin="0,12,0,0"/>
-            <TextBlock Style="{StaticResource Hint}" Margin="24,2,0,0"
-                       Text="Skips a left edge that borders another monitor, so moving the pointer between screens never opens the menu. Turn this off to also open it by pausing on the seam between two screens."/>
           </StackPanel>
-        </ScrollViewer>
-      </TabItem>
+        </Border>
 
-      <TabItem Header="Behavior">
-        <ScrollViewer VerticalScrollBarVisibility="Auto">
-          <StackPanel>
-            <TextBlock Style="{StaticResource Heading}" Text="Hover delay"/>
-            <DockPanel>
-              <TextBlock Style="{StaticResource Value}" Text="{Binding Value, ElementName=DelaySlider, StringFormat={}{0:0} ms}"/>
-              <Slider x:Name="DelaySlider" Minimum="0" Maximum="1000" TickFrequency="25" IsSnapToTickEnabled="True"/>
-            </DockPanel>
-            <TextBlock Style="{StaticResource Hint}" Text="How long the pointer must rest on the edge before the menu opens."/>
+        <!-- Toolbar -->
+        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+          <Button Click="AddFiles_Click" Margin="0,0,8,0">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="&#xE8E5;" FontFamily="{StaticResource Icons}" FontSize="13" Margin="0,0,8,0" VerticalAlignment="Center"/>
+              <TextBlock Text="Add files"/>
+            </StackPanel>
+          </Button>
+          <Button Click="AddFolder_Click" Margin="0,0,12,0">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="&#xE8B7;" FontFamily="{StaticResource Icons}" FontSize="13" Margin="0,0,8,0" VerticalAlignment="Center"/>
+              <TextBlock Text="Add folder"/>
+            </StackPanel>
+          </Button>
+          <TextBlock Text="or drag files here. Drag rows to reorder." Style="{StaticResource Dim}" VerticalAlignment="Center"/>
+        </DockPanel>
 
-            <TextBlock Style="{StaticResource Heading}" Text="Edge thickness"/>
-            <DockPanel>
-              <TextBlock Style="{StaticResource Value}" Text="{Binding Value, ElementName=EdgeSlider, StringFormat={}{0:0} px}"/>
-              <Slider x:Name="EdgeSlider" Minimum="1" Maximum="20" TickFrequency="1" IsSnapToTickEnabled="True"/>
-            </DockPanel>
-            <TextBlock Style="{StaticResource Hint}" Text="How close to the edge counts as touching it."/>
-
-            <TextBlock Style="{StaticResource Heading}" Text="Wheel radius"/>
-            <DockPanel>
-              <TextBlock Style="{StaticResource Value}" Text="{Binding Value, ElementName=RadiusSlider, StringFormat={}{0:0}}"/>
-              <Slider x:Name="RadiusSlider" Minimum="120" Maximum="360" TickFrequency="10" IsSnapToTickEnabled="True"/>
-            </DockPanel>
-
-            <TextBlock Style="{StaticResource Heading}" Text="Item size"/>
-            <DockPanel>
-              <TextBlock Style="{StaticResource Value}" Text="{Binding Value, ElementName=SizeSlider, StringFormat={}{0:0}}"/>
-              <Slider x:Name="SizeSlider" Minimum="40" Maximum="128" TickFrequency="4" IsSnapToTickEnabled="True"/>
-            </DockPanel>
-
-            <TextBlock Style="{StaticResource Heading}" Text="Remove / add symbols"/>
-            <ComboBox x:Name="SymbolPicker" HorizontalAlignment="Left" MinWidth="220">
-              <ComboBox.ItemTemplate>
+        <!-- Items -->
+        <Border Style="{StaticResource Card}" Padding="6" Margin="0">
+          <Grid>
+            <ListBox x:Name="ItemsList" Style="{StaticResource PlainList}" ItemContainerStyle="{StaticResource PlainRow}"
+                     AllowDrop="True" DragOver="ItemsList_DragOver" Drop="ItemsList_Drop"
+                     PreviewMouseLeftButtonDown="ItemsList_PreviewMouseLeftButtonDown" PreviewMouseMove="ItemsList_PreviewMouseMove">
+              <ListBox.ItemTemplate>
                 <DataTemplate>
-                  <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="{Binding Glyph}" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="16"
-                               Width="24" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding AddGlyph}" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="16"
-                               Width="32" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding Label}" VerticalAlignment="Center"/>
-                  </StackPanel>
+                  <DockPanel>
+                    <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="{Binding RemoveGlyph}"
+                            ToolTip="{Binding RemoveText}" Click="RemoveItem_Click" VerticalAlignment="Center"/>
+                    <TextBlock DockPanel.Dock="Left" Text="&#xE76F;" FontFamily="{StaticResource Icons}" FontSize="12"
+                               Foreground="{DynamicResource TextDim}" VerticalAlignment="Center" Margin="0,0,8,0" Cursor="SizeAll"/>
+                    <Image DockPanel.Dock="Left" Source="{Binding Icon}" Width="28" Height="28" Margin="0,0,10,0"
+                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                    <StackPanel VerticalAlignment="Center">
+                      <TextBox Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource InlineEdit}" FontWeight="SemiBold"/>
+                      <TextBlock Margin="5,0,0,0" FontSize="11" TextTrimming="CharacterEllipsis">
+                        <Run Text="{Binding Path, Mode=OneWay}" Foreground="{DynamicResource TextDim}"/>
+                        <Run Text="{Binding MissingText, Mode=OneWay}" Foreground="{DynamicResource Danger}"/>
+                      </TextBlock>
+                    </StackPanel>
+                  </DockPanel>
                 </DataTemplate>
-              </ComboBox.ItemTemplate>
-            </ComboBox>
-            <TextBlock Style="{StaticResource Hint}"
-                       Text="The first appears in the middle of the menu while you hold an icon: drop it there to take it off the ring (the file itself is never touched). The second marks where files dragged in from Explorer will be added."/>
+              </ListBox.ItemTemplate>
+            </ListBox>
+            <TextBlock x:Name="EmptyHint" Text="This ring is empty. Add files or folders, or drag them in from Explorer."
+                       Style="{StaticResource Dim}" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False"/>
+          </Grid>
+        </Border>
+      </DockPanel>
+    </Grid>
 
-            <CheckBox x:Name="InvertScroll" Content="Reverse scroll direction" Margin="0,18,0,6"/>
-            <CheckBox x:Name="IgnoreFullscreen" Content="Don't open over full-screen apps and games" Margin="0,6"/>
-            <CheckBox x:Name="StartWithWindows" Content="Start HaloDock when I sign in to Windows" Margin="0,6"/>
+    <!-- Screen edges page -->
+    <ScrollViewer x:Name="PageEdges" Grid.Column="1" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+      <StackPanel Margin="24,20,24,20" MaxWidth="640" HorizontalAlignment="Left">
+        <TextBlock Text="Screen edges" Style="{StaticResource PageTitle}"/>
+        <TextBlock Text="Rest the pointer against a highlighted edge to open the wheel. Click an edge to turn it on or off." Style="{StaticResource Dim}" Margin="0,0,0,16"/>
 
-            <TextBlock Style="{StaticResource Hint}" Margin="0,16,0,0"
-                       Text="In the menu: scroll to turn the wheel, left-click to open, right-click for the usual Windows menu. Drag files to the edge and drop them on a folder to move/copy them there (Ctrl = copy, Shift = move), or on an app to open them with it. Move away to close."/>
+        <Border Style="{StaticResource Card}">
+          <Grid HorizontalAlignment="Center" Margin="0,8">
+            <!-- Drawn monitor with clickable edges -->
+            <Grid Width="300" Height="190">
+              <Border CornerRadius="8" BorderThickness="2" BorderBrush="{DynamicResource CardBorder}" Background="{DynamicResource InputBg}" Margin="18"/>
+              <ToggleButton x:Name="EdgeTop" Style="{StaticResource EdgeToggle}" Height="8" VerticalAlignment="Top" Margin="26,4,26,0"
+                            Checked="Edge_Changed" Unchecked="Edge_Changed" ToolTip="Top edge"/>
+              <ToggleButton x:Name="EdgeLeft" Style="{StaticResource EdgeToggle}" Width="8" HorizontalAlignment="Left" Margin="4,26,0,26"
+                            Checked="Edge_Changed" Unchecked="Edge_Changed" ToolTip="Left edge"/>
+              <ToggleButton x:Name="EdgeRight" Style="{StaticResource EdgeToggle}" Width="8" HorizontalAlignment="Right" Margin="0,26,4,26"
+                            Checked="Edge_Changed" Unchecked="Edge_Changed" ToolTip="Right edge"/>
+              <Border Height="8" VerticalAlignment="Bottom" Margin="26,0,26,4" CornerRadius="4" Opacity="0.35"
+                      Background="{DynamicResource TrackBg}" ToolTip="The bottom is left to the taskbar"/>
+              <TextBlock x:Name="EdgeSummary" HorizontalAlignment="Center" VerticalAlignment="Center" Style="{StaticResource Dim}"/>
+            </Grid>
+          </Grid>
+        </Border>
+
+        <Border Style="{StaticResource Card}">
+          <StackPanel>
+            <TextBlock Text="Monitors" Style="{StaticResource SectionTitle}"/>
+            <WrapPanel Margin="0,4,0,6">
+              <RadioButton x:Name="ModeAll" Style="{StaticResource Segment}" GroupName="Mode" Content="All monitors" Checked="Mode_Checked"/>
+              <RadioButton x:Name="ModePrimary" Style="{StaticResource Segment}" GroupName="Mode" Content="Primary only" Checked="Mode_Checked"/>
+              <RadioButton x:Name="ModeSelected" Style="{StaticResource Segment}" GroupName="Mode" Content="Choose" Checked="Mode_Checked"/>
+            </WrapPanel>
+            <ItemsControl x:Name="MonitorList" Margin="2,4,0,0">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <CheckBox Content="{Binding Label}" IsChecked="{Binding IsChecked}" Margin="0,4" Click="Changed"/>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
           </StackPanel>
-        </ScrollViewer>
-      </TabItem>
-    </TabControl>
-  </DockPanel>
+        </Border>
+
+        <Border Style="{StaticResource Card}">
+          <StackPanel>
+            <CheckBox x:Name="OuterOnly" Style="{StaticResource Toggle}" Click="Changed">
+              <StackPanel>
+                <TextBlock Text="Only use outer edges"/>
+                <TextBlock Style="{StaticResource Dim}" FontSize="12" Margin="0,2,0,0"
+                           Text="Skip an edge that borders another monitor, so moving between screens never opens the wheel."/>
+              </StackPanel>
+            </CheckBox>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- Behavior page -->
+    <ScrollViewer x:Name="PageBehavior" Grid.Column="1" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+      <StackPanel Margin="24,20,24,20" MaxWidth="640" HorizontalAlignment="Left">
+        <TextBlock Text="Behavior" Style="{StaticResource PageTitle}"/>
+        <TextBlock Text="How the wheel looks and feels." Style="{StaticResource Dim}" Margin="0,0,0,16"/>
+
+        <Border Style="{StaticResource Card}">
+          <StackPanel>
+            <DockPanel>
+              <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=DelaySlider, StringFormat={}{0:0} ms}" Foreground="{DynamicResource TextDim}"/>
+              <TextBlock Text="Hover delay"/>
+            </DockPanel>
+            <Slider x:Name="DelaySlider" Minimum="0" Maximum="1000" TickFrequency="25" IsSnapToTickEnabled="True" ValueChanged="SliderChanged" Margin="0,6,0,14"/>
+
+            <DockPanel>
+              <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=EdgeSlider, StringFormat={}{0:0} px}" Foreground="{DynamicResource TextDim}"/>
+              <TextBlock Text="Edge thickness"/>
+            </DockPanel>
+            <Slider x:Name="EdgeSlider" Minimum="1" Maximum="20" TickFrequency="1" IsSnapToTickEnabled="True" ValueChanged="SliderChanged" Margin="0,6,0,14"/>
+
+            <DockPanel>
+              <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=RadiusSlider, StringFormat={}{0:0}}" Foreground="{DynamicResource TextDim}"/>
+              <TextBlock Text="Wheel size"/>
+            </DockPanel>
+            <Slider x:Name="RadiusSlider" Minimum="110" Maximum="360" TickFrequency="10" IsSnapToTickEnabled="True" ValueChanged="SliderChanged" Margin="0,6,0,14"/>
+
+            <DockPanel>
+              <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=SizeSlider, StringFormat={}{0:0}}" Foreground="{DynamicResource TextDim}"/>
+              <TextBlock Text="Icon size"/>
+            </DockPanel>
+            <Slider x:Name="SizeSlider" Minimum="40" Maximum="128" TickFrequency="4" IsSnapToTickEnabled="True" ValueChanged="SliderChanged" Margin="0,6,0,0"/>
+          </StackPanel>
+        </Border>
+
+        <Border Style="{StaticResource Card}">
+          <StackPanel>
+            <TextBlock Text="Remove / add symbols" Style="{StaticResource SectionTitle}"/>
+            <TextBlock Style="{StaticResource Dim}" FontSize="12" Margin="0,0,0,10"
+                       Text="The first appears in the middle while you hold an icon: drop it there to take it off the ring (the file is never touched). The second marks where dragged-in files will be added."/>
+            <ItemsControl x:Name="SymbolList">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <RadioButton Style="{StaticResource Segment}" GroupName="Symbol" IsChecked="{Binding IsSelected}" Checked="Symbol_Checked">
+                    <StackPanel Orientation="Horizontal">
+                      <TextBlock Text="{Binding Glyph}" FontFamily="{StaticResource Icons}" FontSize="15" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                      <TextBlock Text="{Binding AddGlyph}" FontFamily="{StaticResource Icons}" FontSize="15" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                      <TextBlock Text="{Binding Label}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                  </RadioButton>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+
+        <Border Style="{StaticResource Card}">
+          <StackPanel>
+            <CheckBox x:Name="InvertScroll" Style="{StaticResource Toggle}" Content="Reverse scroll direction" Click="Changed" Margin="0,0,0,12"/>
+            <CheckBox x:Name="IgnoreFullscreen" Style="{StaticResource Toggle}" Content="Don't open over full-screen apps and games" Click="Changed" Margin="0,0,0,12"/>
+            <CheckBox x:Name="StartWithWindows" Style="{StaticResource Toggle}" Content="Start HaloDock when I sign in to Windows" Click="Changed"/>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+
+    <!-- Updates page -->
+    <ScrollViewer x:Name="PageUpdates" Grid.Column="1" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+      <StackPanel Margin="24,20,24,20" MaxWidth="640" HorizontalAlignment="Left">
+        <TextBlock Text="Updates" Style="{StaticResource PageTitle}"/>
+        <TextBlock x:Name="UpdatesVersion" Style="{StaticResource Dim}" Margin="0,0,0,16"/>
+
+        <Border Style="{StaticResource Card}">
+          <CheckBox x:Name="CheckForUpdates" Style="{StaticResource Toggle}" Click="Changed">
+            <StackPanel>
+              <TextBlock Text="Check for updates automatically"/>
+              <TextBlock Style="{StaticResource Dim}" FontSize="12" Margin="0,2,0,0"
+                         Text="Once a day, HaloDock asks GitHub whether there's a newer release. Nothing about you or your files is sent."/>
+            </StackPanel>
+          </CheckBox>
+        </Border>
+
+        <Border Style="{StaticResource Card}">
+          <StackPanel>
+            <DockPanel>
+              <Button x:Name="CheckNowButton" DockPanel.Dock="Right" Content="Check now" Click="CheckNow_Click"/>
+              <TextBlock x:Name="UpdateStatus" Text="Not checked yet." VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,12,0"/>
+            </DockPanel>
+            <StackPanel x:Name="UpdatePanel" Orientation="Horizontal" Margin="0,12,0,0" Visibility="Collapsed">
+              <Button x:Name="InstallButton" Style="{StaticResource AccentButton}" Click="Install_Click" Margin="0,0,8,0"/>
+              <Button Content="What's new" Click="ReleaseNotes_Click"/>
+            </StackPanel>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
 </Window>
