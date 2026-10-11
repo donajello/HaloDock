@@ -28,7 +28,7 @@ A radial launcher for Windows that pops out of the left edge of your screen. Res
 
 ## Install
 
-`HaloDock.exe` is a standalone build: it runs without anything else installed. Run it and it sits in the system tray. Left-click the tray icon for settings; right-click for Pause and Exit. Settings has an option to start HaloDock when you sign in.
+Download `HaloDock.exe` from the [latest release](../../releases/latest). It's a standalone build for 64-bit Windows 10/11 and runs without anything else installed. Run it and it sits in the system tray. Left-click the tray icon for settings; right-click for Pause and Exit. Settings has an option to start HaloDock when you sign in.
 
 Windows SmartScreen may warn the first time, since the exe isn't code-signed. Choose **More info → Run anyway**.
 
