@@ -3,10 +3,12 @@
 A radial launcher for Windows that pops out of the left edge of your screen. Rest your pointer against the edge and your files, folders and apps fan out in a half-wheel; scroll to turn it, click to open.
 
 <p>
-  <img src="docs/screenshots/wheel.png" width="24%" alt="The wheel open at the screen edge">
-  <img src="docs/screenshots/wheel-hover.png" width="24%" alt="Hovering an item">
-  <img src="docs/screenshots/wheel-rings.png" width="24%" alt="Hovering a ring dot">
-  <img src="docs/screenshots/wheel-rearrange.png" width="24%" alt="Picking up an icon to move it">
+  <img src="docs/screenshots/wheel.png" width="32%" alt="The wheel open at the screen edge">
+  <img src="docs/screenshots/wheel-hover.png" width="32%" alt="Hovering an item">
+  <img src="docs/screenshots/wheel-rings.png" width="32%" alt="Hovering a ring dot">
+  <img src="docs/screenshots/wheel-rearrange.png" width="32%" alt="Picking up an icon to move it">
+  <img src="docs/screenshots/wheel-unpin.png" width="32%" alt="Dropping a held icon on the unpin target">
+  <img src="docs/screenshots/wheel-pin.png" width="32%" alt="Dragging a file into a gap to pin it">
 </p>
 
 ## Features
