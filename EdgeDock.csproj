@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <RootNamespace>EdgeDock</RootNamespace>
+    <AssemblyName>EdgeDock</AssemblyName>
+    <Version>0.1.0</Version>
+    <Product>EdgeDock</Product>
+    <Description>Radial launcher that pops out from the edge of your screen.</Description>
+    <!-- WinForms is only used for the tray icon; DPI awareness belongs in the manifest for WPF. -->
+    <!-- WPF0001: Fluent ThemeMode (follows Windows light/dark) is marked experimental in .NET 9. -->
+    <NoWarn>$(NoWarn);WFO0003;WPF0001</NoWarn>
+  </PropertyGroup>
+
+</Project>
